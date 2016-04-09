@@ -1319,14 +1319,7 @@ function display() {
 
         //Check if we have a closest to focal checked
         var closestId = $('.closest-chimp').prop('id');
-        var noClosestOk = false;
-        //If no closest to focal, give an alert. 
-        if (closestId == undefined) {
-            noClosestOk = confirm('No nearest to focal. Are you sure?');
-        }
-        else {
-            noClosestOk = true;
-        }
+        var noClosestOk = (closestId != undefined);
 
         //Check if we have any chimps within 5m
         var maleChimps = getMaleChimps();
@@ -1339,11 +1332,13 @@ function display() {
             var within5Checkbox = $('#' + chimpId + fiveMeterSuffix);
             if (within5Checkbox.prop('checked') == true) {
                 noneWithin5ok = true;
+                break;
             }
         }
         //If none within 5m of focal, give an alert. 
         if (noneWithin5ok == false) {
-            noneWithin5ok = confirm('No chimps within 5m. Are you sure?');
+            // noneWithin5ok = confirm('No chimps within 5m. Are you sure?');
+            confirmMsg += "\nNo chimps within 5m. Are you sure?"
         }
 
         if ((noClosestOk == true) && (noneWithin5ok == true)) {
@@ -1358,6 +1353,12 @@ function display() {
                 odkCommon.getFileAsUrl('config/assets/followScreen.html' + queryString);
             console.log('url: ' + url);
             window.location.href = url;
+        } else {
+            var confirmMsg = "";
+            confirmMsg += !noClosestOk ? "No nearest to focal. Are you sure?"  : "";
+            confirmMsg += !noneWithin5ok ? "\nNo chimps within 5m. Are you sure?" : "";
+
+            confirm(confirmMsg);
         }
         
     });
