@@ -666,6 +666,12 @@ function display() {
         return result;
     };
 
+    var getAllChimps = function() {
+        var maleChimps = getMaleChimps();
+        var femaleChimps = getFemaleChimps();
+        return maleChimps.toArray().concat(femaleChimps.toArray());
+    };
+
 
     /**
      * Update the contents of the database based on the state of the UI.
@@ -679,10 +685,7 @@ function display() {
 
         // First, get all the chimps. This means the male chimps and the female
         // chimps.
-        var maleChimps = getMaleChimps();
-        var femaleChimps = getFemaleChimps();
-        
-        var allChimps = maleChimps.toArray().concat(femaleChimps.toArray());
+        var allChimps = getAllChimps();
         var i = 0;
         for (i = 0; i < allChimps.length; i++) {
             var chimp = allChimps[i];
@@ -1319,34 +1322,14 @@ function display() {
 
         //Check if we have a closest to focal checked
         var closestId = $('.closest-chimp').prop('id');
-        var noClosestOk = false;
-        //If no closest to focal, give an alert. 
-        if (closestId == undefined) {
-            noClosestOk = confirm('No nearest to focal. Are you sure?');
-        }
-        else {
-            noClosestOk = true;
-        }
+        var noClosestOk = (closestId != undefined);
 
         //Check if we have any chimps within 5m
-        var maleChimps = getMaleChimps();
-        var femaleChimps = getFemaleChimps();
-        var allChimps = maleChimps.toArray().concat(femaleChimps.toArray());
-        
-        var noneWithin5ok = false;
-        for (var i = 0; i < allChimps.length; i++) {
-            var chimpId = allChimps[i].id;
-            var within5Checkbox = $('#' + chimpId + fiveMeterSuffix);
-            if (within5Checkbox.prop('checked') == true) {
-                noneWithin5ok = true;
-            }
-        }
-        //If none within 5m of focal, give an alert. 
-        if (noneWithin5ok == false) {
-            noneWithin5ok = confirm('No chimps within 5m. Are you sure?');
-        }
+        var noneWithin5Ok = getAllChimps().some(function(c) {
+            return $('#' + c.id + fiveMeterSuffix).prop('checked');
+        });
 
-        if ((noClosestOk == true) && (noneWithin5ok == true)) {
+        if ((noClosestOk == true) && (noneWithin5Ok == true)) {
             // And now launch the next screen
             var nextTime = incrementTime(followTime);
 
@@ -1358,6 +1341,11 @@ function display() {
                 odkCommon.getFileAsUrl('config/assets/followScreen.html' + queryString);
             console.log('url: ' + url);
             window.location.href = url;
+        } else {
+            var confirmMsgs = ["Are you sure?"];
+            if (!noClosestOk) { confirmMsgs.push("No nearest to focal."); }
+            if (!noneWithin5Ok) { confirmMsgs.push("No chimps within 5m."); }
+            confirm(confirmMsgs.join('\n'));
         }
         
     });
