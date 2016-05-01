@@ -2,9 +2,12 @@
 'use strict';
 
 var $ = require('jquery');
+require('jquery-ui');
+var Papa = require('papaparse');
+
 var db = require('./jgiDb');
 var urls = require('./jgiUrls');
-var util = require('./jgiUtil');
+var jgiUtil = require('./jgiUtil');
 var models = require('./jgiModels');
 
 var chimpData;
@@ -15,6 +18,50 @@ function invalidDataToStart(data) {
   } else {
     return false;
   }
+}
+
+function writeNewFollow(
+            date,
+            focalChimpId,
+            communityId,
+            beginTime,
+            researcher) {
+    
+        var struct = {};
+        struct['FOL_date'] = date;
+        struct['FOL_B_AnimID'] = focalChimpId;
+        struct['FOL_CL_community_id'] = communityId;
+        struct['FOL_time_begin'] = beginTime;
+        struct['FOL_am_observer1'] = researcher;
+
+        // Now we'll write it into the database.
+
+        var rowId = util.genUUID();
+        odkData.addRow('follow', struct, rowId, cbSuccess, cbFailure);
+}
+
+function cbSuccess(result) {
+    console.log('jgiNewFollow: cbSuccess addRow with result: ' + result);
+
+    var date = $('#FOL_date').val();
+    var focalChimpId = $('#FOL_B_AnimID').val().toLowerCase();
+    var beginTime = $('#FOL_begin_time').val();
+
+    // Now we'll launch the follow screen. The follow screen needs to know
+    // what date we're on, as well as the time it should be using.
+    var queryString = util.getKeysToAppendToURL(
+        date,
+        beginTime,
+        focalChimpId);
+    var url = odkCommon.getFileAsUrl(
+            'config/assets/followScreen.html' + queryString);
+
+    // There seems to be an issue with the way window.location is set here
+    window.location.href = url;
+}
+
+function cbFailure(error) {
+    console.log('jgiNewFollow: cbFailure failed with error: ' + error);
 }
 
 /*
@@ -43,7 +90,7 @@ function fetchChimpList() {
 
       // Clear the UI element and add all communities to it
       $communities.empty();
-      $communities.append("<option class=\"first\"><span>Kundi</span></option>");
+      $communities.append("<option disabled selected class=\"first\"><span>Kundi</span></option>");
 
       for (var i = 0; i < communityList.length; i++) {
         var communityVal = communityList[i].trim().toLowerCase().replace(" ", "_");
@@ -58,7 +105,7 @@ function fetchChimpList() {
 }
 
 
-exports.initializeListeners = function(control) {
+exports.initializeListeners = function() {
 
   $("#FOL_CL_community_id").change(function() {
     var $chimps = $("#FOL_B_AnimID");
@@ -88,58 +135,34 @@ exports.initializeListeners = function(control) {
     var date = $('#FOL_date').val();
     var focalChimpId = $('#FOL_B_AnimID').val().toLowerCase();
     var communityId = $('#FOL_CL_community_id').val();
-    var beginTimeDb = $('#FOL_begin_time').val();
+    var beginTime = $('#FOL_begin_time').val();
     var researcher = $('#FOL_am_observer_1').val();
 
-    if (
-      invalidDataToStart(date) ||
-      invalidDataToStart(focalChimpId) ||
-      invalidDataToStart(beginTimeDb) ||
-      invalidDataToStart(researcher)
-      )
-    {
+    if ([date, focalChimpId, beginTime, researcher].some(invalidDataToStart)) {
       alert('Date, Focal Chimp, Start Time, and Researcher Required');
       return;
     }
 
-    $('#formsubmitbutton').css('display', 'none'); // to undisplay
-    $('#buttonreplacement').css('display', 'block'); // to display
-
-    var follow = new models.Follow(
-        date,
-        beginTimeDb,
-        focalChimpId,
-        communityId,
-        researcher
-    );
+    $('#form-submit-button').css('display', 'none'); // to undisplay
+    $('#spinners').css('display', 'block'); // to display
 
     // Update the database.
-    db.writeNewFollow(
-        control,
-        follow
-    );
-
-    // Now we'll launch the follow screen. The follow screen needs to know
-    // what date we're on, as well as the time it should be using.
-    var queryString = urls.createParamsForFollow(
-        date,
-        beginTimeDb,
-        focalChimpId,
-        communityId
-        );
-    var url = control.getFileAsUrl(
-        'assets/followScreen.html' + queryString);
-    window.location.href = url;
+    writeNewFollow(
+            date,
+            focalChimpId,
+            communityId,
+            beginTime,
+            researcher);
   });
 };
 
+exports.initializeUi = function() {
+  exports.initializeListeners();
 
+  $("#FOL_date").datepicker();
 
-exports.initializeUi = function(control) {
-  exports.initializeListeners(control);
-
-  var timesDb = util.getAllTimesForDb();
-  var timesUser = util.getAllTimesForUser();
+  var timesDb = jgiUtil.getAllTimesForDb();
+  var timesUser = jgiUtil.getAllTimesForUser();
   if (timesDb.length !== timesUser.length) {
     alert('Length of db times and user times not equal, problem!');
   }

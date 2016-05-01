@@ -5,11 +5,9 @@
         <link href="ratchet/css/ratchet.css" type="text/css" rel="stylesheet" />
         <link href="ratchet/css/ratchet-theme-android.css" type="text/css" rel="stylesheet" />
         <link href="css/gatesHomeScreen.css" type="text/css" rel="stylesheet" />
-        <script type="text/javascript" src="libs/jquery.js"></script>
         <script type="text/javascript" src="../../system/js/odkCommon.js"></script>
         <script type="text/javascript" src="../../system/js/odkData.js"></script>
         <script type="text/javascript" src="../../system/tables/js/odkTables.js"></script>
-        <script type="text/javascript" src="js/jgiHomeScreen.js"></script>
     </head>
 
     <body id="main">
@@ -21,17 +19,24 @@
     <div class="description-text" id="description">Follow</div>
     <ul id="navigation-buttons">
         <li><button class="btn btn-primary btn-block btn-launch" id="begin-follow-button">
-          New Follow
+          Anza ufuataji [New Follow]
         </button>
         </li>
         <li><button class="btn btn-primary btn-block btn-launch" id="existing-follow-button">
-          Continue Follow
+          Endelea kufuata [Existing Follow]
         </button>
+        </li>
+        <li>
+          <button class="btn btn-primary btn-block btn-launch" id="most-recent-follow-button">
+          Endelea na ufuataji ulipoachia [Most Recent Follow]
+          </button>
         </li>
     </ul>
   </div>
+        <script type="text/javascript" src="js/jgi/dist/homeScreenBundle.js"></script>
         <script type="text/javascript">
-            $(display());
+            var jgiHomeScreen = require('jgiHomeScreen');
+            jgiHomeScreen.initializeUi();
         </script>
     </body>
 </html>

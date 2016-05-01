@@ -24,6 +24,7 @@ function cbSuccess(result) {
 function cbFailure(error) {
     console.log('jgiNewFollow: cbFailure failed with error: ' + error);
 }
+
 function display() {
 
     // Here we are expecting just to add a row with the data elements into

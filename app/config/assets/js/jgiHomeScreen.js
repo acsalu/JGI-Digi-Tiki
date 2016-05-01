@@ -7,6 +7,10 @@ function display() {
     });
 
     $('#existing-follow-button').on('click', function() {
+        odkTables.launchHTML('config/assets/followScreen.html');
+    });
+
+    $('#most-recent-follow-button').on('click', function() {
         //alert('Not yet implemented');
         odkTables.launchHTML('config/assets/followScreen.html');
     });

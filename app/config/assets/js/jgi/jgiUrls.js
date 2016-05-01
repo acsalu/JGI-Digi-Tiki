@@ -33,7 +33,7 @@ exports.getQueryParameter = function(key) {
   var href = document.location.search;
   var startIndex = href.search(key);
   if (startIndex < 0) {
-    console.log('requested query parameter not found: ' + key);
+    console.log('[jgiUrls.js] requested query parameter not found: ' + key);
     return null;
   }
   // Then we want the substring beginning after "key=".
