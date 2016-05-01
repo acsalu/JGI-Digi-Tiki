@@ -1,40 +1,64 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <meta name="viewport" content="width=device-width" />
-        <link href="ratchet/css/ratchet.css" type="text/css" rel="stylesheet" />
-        <link href="css/gatesHomeScreen.css" type="text/css" rel="stylesheet" />
-        <link href="css/jgi-follow.css" type="text/css" rel="stylesheet" />
-        <script type="text/javascript" src="libs/jquery.js"></script>
-        <script type="text/javascript" src="js/bootstrap.js"></script>
-        <script type="text/javascript" src="js/ratchet.js"></script>
-        <script type="text/javascript" src="../../system/js/odkCommon.js"></script>
-        <script type="text/javascript" src="../../system/js/odkData.js"></script>
-        <script type="text/javascript" src="../../system/tables/js/odkTables.js"></script>
-        <script type="text/javascript" src="js/jgiNewFollow.js"></script>
-        <script type="text/javascript" src="js/util.js"></script>
-    </head>
+  <head>
+    <meta name="viewport" content="width=device-width" />
+    <link href="ratchet/css/ratchet.css" type="text/css" rel="stylesheet" />
+    <link href="css/gatesHomeScreen.css" type="text/css" rel="stylesheet" />
+    <link href="css/jquery-ui.css" type="text/css" rel="stylesheet" />
+    <link href="css/jgi-follow.css" type="text/css" rel="stylesheet" />
+    <link href="css/jgi-new-follow.css" type="text/css" rel="stylesheet" />
+    
+    <script type="text/javascript" src="lib/jquery.js"></script>
+    <script type="text/javascript" src="js/bootstrap.js"></script>
+    <script type="text/javascript" src="js/ratchet.js"></script>
 
-    <body id="main">
-    <!-- Here we'll just collect some data to about the follow we're about to
-    begin. -->
-    <div class="container">
+    <script type="text/javascript" src="../../system/js/odkCommon.js"></script>
+    <script type="text/javascript" src="../../system/js/odkData.js"></script>
+    <script type="text/javascript" src="../../system/tables/js/odkTables.js"></script>
+
+    <script type="text/javascript" src="js/util.js"></script>
+  </head>
+  <body id="main">
+  <!-- Here we'll just collect some data to about the follow we're about to begin. -->
+  <div class="container">
     <div class="description-text" id="description">New Follow</div>
+  
+    <form>
+      <input id="FOL_date" type="text" readonly="true" placeholder="Tarehe ya ufuataji [Date of Follow]">
+      <!-- Community ID -->
+      <select id="FOL_CL_community_id" type="text">
+        <!-- Communities are populated from config/chimpList.csv -->
+      </select>
+      
+      <!-- ID of Focal Chimp -->
+      <select id = "FOL_B_AnimID" class="text" disabled>
+      </select>
+      
+      <!-- Begin Time -->
+      <select id="FOL_begin_time" type="text">
+        <option class="first"><span style="color: gray;">Muda wa kuanza (s:dk) [Begin Time (hh:mm)]</span></option>
+      </select>
+      <!-- Name of Researcher -->
+      <input id="FOL_am_observer_1" type="text" placeholder="Jina la mtafiti [Name of Researcher]">
+    </div>
+    </form>
 
-      <form>
-        <input id="FOL_date" type="text" placeholder="Date of Follow">
-        <input id="FOL_B_AnimID" type="text" placeholder="ID of Focal Chimp">
-        <input id="FOL_CL_community_id" type="text" placeholder="Community ID">
-        <input id="FOL_begin_time" type="text" placeholder="Begin Time (hh:mm)">
-        <input id="FOL_am_observer_1" type="text" placeholder="Name of Researcher">
-      </form>
+    <div id="form-submit-button">
+      <button id="begin-follow" class="btn-launch btn btn-positive btn-block">Anza [Begin]</button>
+    </div>
 
-      <!-- Note that this button cannot go inside the form. I should probably
-      figure out why. -->
-      <button id="begin-follow" class="btn-launch btn btn-positive btn-block">Begin</button>
+    <div class="sk-spinner sk-spinner-three-bounce" id="spinners" style="display:none;">
+      <div class="sk-bounce1"></div>
+      <div class="sk-bounce2"></div>
+      <div class="sk-bounce3"></div>
+    </div>
   </div> <!-- .container -->
-        <script type="text/javascript">
-            $(display());
-        </script>
-    </body>
+
+  <script type="text/javascript" src="js/jgi/dist/jgiNewFollowBundle.js"></script>
+  <script type="text/javascript">
+    var newFollow = require('jgiNewFollow');
+    newFollow.initializeUi();
+  </script>
+  
+  </body>
 </html>

@@ -1,7 +1,11 @@
 {
-  "name": "jswebviewer",
-  "version": "0.0.0",
-  "dependencies": {},
+  "name": "jgi-digi-tiki",
+  "version": "0.0.1",
+  "dependencies": {
+    "jquery": "~2.2.3",
+    "jquery-ui": "~1.10.5",
+    "papaparse": "~4.1.2"
+  },
   "devDependencies": {
     "grunt": "~0.4.1",
     "grunt-contrib-connect": "~0.6.0",
@@ -14,5 +18,23 @@
   },
   "engines": {
     "node": ">=0.8.0"
-  }
+  },
+  "description": "Digital Tracking Tool for Jane Goodall Institute (JGI)",
+  "main": "Gruntfile.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/acsalu/JGI-Digi-Tiki.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/acsalu/JGI-Digi-Tiki/issues"
+  },
+  "homepage": "https://github.com/acsalu/JGI-Digi-Tiki#readme"
 }
