@@ -1,4 +1,14 @@
 # JGI-Digi-Tiki
 Digital Tracking Tool for Jane Goodall Institute (JGI)
 
-Push code: `grunt adbpush-tables-JGI`
+Source code dir: `src/js`
+
+Generate bundles: 
+``` shell
+./createBundle.sh
+```
+
+Push code to device: 
+``` shell
+grunt adbpush-tables-JGI
+```
