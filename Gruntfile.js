@@ -152,6 +152,11 @@ module.exports = function (grunt) {
                 cmd: function(str) {
                     return 'adb shell ' + str;
                 }
+            },
+            browserify: {
+                cmd: function() {
+                    return '/bin/bash createBundle.sh';
+                }
             }
         },
 
@@ -173,7 +178,9 @@ module.exports = function (grunt) {
             test: {
                 files: ['test/spec/**/*.js'],
                 tasks: ['test']
-            }
+            },
+            tasks: ['script'],
+            files: ['src/js/**/*.js']
         },
         connect: {
             options: {
@@ -234,6 +241,15 @@ module.exports = function (grunt) {
     // We need grunt-exec to run adb commands from within grunt. 
     grunt.loadNpmTasks('grunt-exec');
     grunt.loadNpmTasks('grunt-browserify');
+    grunt.loadNpmTasks('grunt-contrib-watch');
+
+    grunt.registerTask(
+        'script',
+        'Generate js bundles with Browserify',
+        function() {
+            grunt.log.writeln('File change.');
+            grunt.task.run('exec:browserify');
+        });
 
     // Just an alias task--shorthand for doing all the pullings
     grunt.registerTask(

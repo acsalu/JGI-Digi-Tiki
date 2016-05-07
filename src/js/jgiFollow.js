@@ -5,10 +5,12 @@
  * Code for dealing with the follow screen, in particular the UI.
  */
 
+var $ = require('jquery');
+var Papa = require('papaparse');
+
 var urls = require('./jgiUrls');
 var models = require('./jgiModels');
 var db = require('./jgiDb');
-var $ = require('jquery');
 var util = require('./jgiUtil');
 var logging = require('./jgiLogging');
 

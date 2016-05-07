@@ -53,6 +53,7 @@ function cbSuccess(result) {
         date,
         beginTime,
         focalChimpId);
+    console.log("jgiNewFollow queryString: " + queryString);
     var url = odkCommon.getFileAsUrl(
             'config/assets/followScreen.html' + queryString);
 

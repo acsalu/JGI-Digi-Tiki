@@ -11433,15 +11433,16 @@ exports.convertToStringWithTwoZeros = function(intTime) {
 },{}],"jgiFollowList":[function(require,module,exports){
 'use strict';
 
+var $ = require('jquery');
+
 var db = require('./jgiDb.js');
 var urls = require('./jgiUrls.js');
-var $ = require('jquery');
 var logger = require('./jgiLogging');
 
 /**
  * Called when page loads to display things (Nothing to edit here)
  */
-exports.initializeUi = function initializeUi(control) {
+exports.initializeUi = function initializeUi() {
 
   logger.initializeLogging();
 
@@ -11469,61 +11470,75 @@ exports.initializeUi = function initializeUi(control) {
       ' jgiLogging: showIntervals with params: ' +
       queryParams
     );
-    var url = control.getFileAsUrl(
-      'assets/followIntervalList.html' + queryParams
+    var url = odkCommon.getFileAsUrl(
+      'config/assets/followIntervalList.html' + queryParams
     );
 
     if (isReviewSet === 'false') {
-      url = control.getFileAsUrl(
-          'assets/followIntervalList.html' + queryParams
+      url = odkCommon.getFileAsUrl(
+          'config/assets/followIntervalList.html' + queryParams
       );
       window.location.href = url;
 
     } else {
-      url = control.getFileAsUrl(
-          'assets/jgiFollowReview.html' + queryParams
+      url = odkCommon.getFileAsUrl(
+          'config/assets/jgiFollowReview.html' + queryParams
       );
       window.location.href = url;
     }
   });
 
-  exports.displayFollows(control);
+  exports.displayFollows();
 
 };
+
+function cbGetAllFollowSuccess(follows) {
+  console.log('GetAllFollowSuccess: ' + follows.getCount() + ' follows.');
+  for (var i = 0; i < follows.getCount(); ++i) {
+    var $item = $('<li>');
+
+    var date = follows.getData(i, 'FOL_date');
+    var beginTime = follows.getData(i, 'FOL_time_begin');
+    var communityId = follows.getData(i, 'FOL_CL_community_id');
+    var focalId = follows.getData(i, 'FOL_B_AnimID');
+
+    $item.attr('date', date);
+    $item.attr('begin-time', beginTime);
+    $item.attr('focal-id', focalId);
+    $item.attr('community-id', communityId);
+    $item.addClass('item_space');
+    $item.text(date + ' ' + beginTime);
+
+    var $chevron = $('<img>');
+    $chevron.attr('src', odkCommon.getFileAsUrl('config/assets/img/little_arrow.png'));
+    $chevron.attr('class', 'chevron');
+    $item.append($chevron);
+
+    var $focalIdItem = $('<li>');
+    $focalIdItem.addClass('detail');
+    $focalIdItem.text('Focal: ' + focalId);
+    $item.append($focalIdItem);
+
+    $('#list').append($item);
+
+    var $borderDiv = $('<div>');
+    $borderDiv.addClass('divider');
+    $('#list').append($borderDiv);
+  }
+}
+
+function cbGetAllFollowFail(error) {
+ console.error('GetAllFollow failed with error: ' + error);
+}
 
 
 /**
  * Populate the list of Follows.
  */
-exports.displayFollows = function displayFollows(control) {
-  var follows = db.getAllFollows(control);
-
-  follows.forEach(function(follow) {
-    var item = $('<li>');
-    item.attr('date', follow.date);
-    item.attr('focal-id', follow.focalId);
-    item.attr('begin-time', follow.beginTime);
-    item.attr('community-id', follow.communityId);
-    item.addClass('item_space');
-    item.text(follow.date + ' ' + follow.beginTime);
-
-    var chevron = $('<img>');
-    chevron.attr('src', control.getFileAsUrl('assets/img/little_arrow.png'));
-    chevron.attr('class', 'chevron');
-    item.append(chevron);
-
-    var focalIdItem = $('<li>');
-    focalIdItem.attr('class', 'detail');
-    focalIdItem.text('Focal: ' + follow.focalId);
-    item.append(focalIdItem);
-
-    $('#list').append(item);
-    //
-    // don't append the last one to avoid the fencepost problem
-    var borderDiv = $('<div>');
-    borderDiv.addClass('divider');
-    $('#list').append(borderDiv);
-  });
+exports.displayFollows = function displayFollows() {
+  odkData.query('follow', null, null, null, null,
+            null, null, true, cbGetAllFollowSuccess, 
+            cbGetAllFollowFail);
 };
 
 },{"./jgiDb.js":2,"./jgiLogging":3,"./jgiUrls.js":6,"jquery":1}]},{},[]);

@@ -28,7 +28,7 @@ exports.initializeListeners = function() {
     //control.launchHTML('assets/followList.html');
   });
 
-  $mostRecentFollow.click(function() {
+  $('#most-recent-follow-button').click(function() {
     // console.log('clicked most recent');
     // var follows = db.getAllFollows(control);
     
@@ -69,7 +69,7 @@ exports.initializeListeners = function() {
 };
 
 exports.initializeUi = function() {
-  // logging.initializeClickLogger();
+  logging.initializeClickLogger();
 
   exports.initializeListeners();
 };
