@@ -233,6 +233,7 @@ module.exports = function (grunt) {
 
     // We need grunt-exec to run adb commands from within grunt. 
     grunt.loadNpmTasks('grunt-exec');
+    grunt.loadNpmTasks('grunt-browserify');
 
     // Just an alias task--shorthand for doing all the pullings
     grunt.registerTask(

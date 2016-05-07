@@ -1,1592 +1,4 @@
 require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-/* global control */
-'use strict';
-
-var tables = require('./jgiTables');
-var models = require('./jgiModels');
-
-exports.certaintyLabels = {
-  certain: '1',
-  uncertain: '2',
-  nestCertain: '3',
-  nestUncertain: '4'
-};
-
-
-/**
- * True if the chimp has departed or is absent, else false.
- */
-function chimpIsDepartedOrAbsent(chimp) {
-  return chimp.time === exports.timeLabels.absent ||
-    chimp.time === exports.timeLabels.departFirst ||
-    chimp.time === exports.timeLabels.departSecond ||
-    chimp.time === exports.timeLabels.departThird;
-}
-
-
-/**
- * True if the chimp has arrived, else false.
- */
-function chimpIsArrived(chimp) {
-  return chimp.time === exports.timeLabels.arriveFirst ||
-    chimp.time === exports.timeLabels.arriveSecond ||
-    chimp.time === exports.timeLabels.arriveThird;
-}
-
-
-/**
- * Database-facing labels for arrival and departures.
- */
-exports.timeLabels = {
-  absent: '0',
-  continuing: '1',
-  arriveFirst: '5',
-  arriveSecond: '10',
-  arriveThird: '15',
-  departFirst: '-5',
-  departSecond: '-10',
-  departThird: '-15'
-};
-
-
-/**
- * Create a where clause for use in a Tables query. columns must be an array
- * of strings.
- *
- * ['foo', 'bar'] would create something like:
- *  foo = ? AND bar = ?
- */
-exports.createWhereClause = function createWhereClause(columns) {
-  var result = '';
-  columns.forEach(function(value, index, array) {
-    result += value + ' = ?';
-    if (index !== array.length - 1) {
-      result += ' AND ';
-    }
-  });
-  return result;
-};
-
-
-/**
- * Get an array of FollowInterval objects for the Follow specified by the date,
- * beginTime, and focalId.
- */
-exports.getFollowIntervalsForFollow = function getFollowIntervalsForFollow(
-    control,
-    date,
-    focalId
-) {
-  // The query requires a paired chimp. Currently, there's always a row that
-  // pairs a chimp with itself, so we will depend on that row for this query.
-  var table = tables.chimpObservation;
-  var cols = table.columns;
-
-  var whereClause = exports.createWhereClause(
-    [
-      cols.date,
-      cols.focalId,
-      cols.chimpId
-    ]
-  );
-
-  var selectionArgs = [date, focalId, focalId];
-
-  var tableData = control.query(
-      table.tableId,
-      whereClause,
-      selectionArgs
-  );
-
-  var result = exports.convertTableDataToFollowIntervals(tableData);
-  return result;
-};
-
-
-/**
- * Get a query for all the data at the given date and time for the specified
- * focal chimp. Together this specifies a unique time point in a follow.
- */
-exports.getTableDataForTimePoint = function(
-    control,
-    date,
-    followStartTime,
-    focalChimpId
-) {
-
-  var table = tables.chimpObservation;
-
-  var whereClause = exports.createWhereClause(
-    [
-      table.columns.date,
-      table.columns.focalId,
-      table.columns.followStartTime
-    ]
-  );
-
-  var selectionArgs = [date, focalChimpId, followStartTime];
-
-  var result = control.query(
-      table.tableId,
-      whereClause,
-      selectionArgs
-  );
-
-  return result;
-};
-
-
-/**
- * Convert a TableData object that has queried the chimpObservation table to an
- * array of FollowInterval objects.
- */
-exports.convertTableDataToFollowIntervals = function(data) {
-  var result = [];
-
-  var cols = tables.chimpObservation.columns;
-
-  if (!data) {
-    return result;
-  }
-
-  for (var i = 0; i < data.getCount(); i++) {
-    var date = data.getData(i, cols.date);
-    var beginTime = data.getData(i, cols.followStartTime);
-    var focalId = data.getData(i, cols.focalId);
-
-    var followInterval = new models.FollowInterval(date, beginTime, focalId);
-
-    result.push(followInterval);
-  }
-
-  return result;
-};
-
-
-exports.convertTableDataToSpecies = function(data) {
-  var result = [];
-  var cols = tables.species.columns;
-
-  if (!data) {
-    return result;
-  }
-
-  for (var i = 0; i < data.getCount(); i++) {
-    var date = data.getData(i, cols.date);
-    var startTime = data.getData(i, cols.startTime);
-    var endTime = data.getData(i, cols.endTime);
-    var focalId = data.getData(i, cols.focalId);
-    var speciesName = data.getData(i, cols.speciesName);
-    var speciesCount = data.getData(i, cols.speciesCount);
-    var rowId = data.getRowId(i);
-
-    var species = new models.Species(
-        rowId,
-        date,
-        focalId,
-        startTime,
-        endTime,
-        speciesName,
-        speciesCount
-    );
-
-    result.push(species);
-  }
-
-  return result;
-};
-
-
-exports.convertTableDataToFood = function(data) {
-  var result = [];
-  var cols = tables.food.columns;
-
-  if (!data) {
-    return result;
-  }
-
-  for (var i = 0; i < data.getCount(); i++) {
-    var rowId = data.getRowId(i);
-
-    var date = data.getData(i, cols.date);
-    var focalId = data.getData(i, cols.focalId);
-    var foodName = data.getData(i, cols.foodName);
-    var foodPart = data.getData(i, cols.foodPart);
-    var startTime = data.getData(i, cols.startTime);
-    var endTime = data.getData(i, cols.endTime);
-
-    var food = new models.Food(
-        rowId,
-        date,
-        focalId,
-        startTime,
-        endTime,
-        foodName,
-        foodPart
-    );
-
-    result.push(food);
-  }
-
-  return result;
-};
-
-
-/**
- * Convert a table data (eg as returned by getTableDataForTimepoint) to an
- * array of Chimp objects.
- */
-exports.convertTableDataToChimps = function(data) {
-
-  var result = [];
-
-  var cols = tables.chimpObservation.columns;
-
-  if (!data) {
-    return result;
-  }
-
-  for (var i = 0; i < data.getCount(); i++) {
-
-    var rowId = data.getRowId(i);
-
-    var chimpId = data.getData(i, cols.chimpId).trim();
-    var time = data.getData(i, cols.time).trim();
-    var certainty = data.getData(i, cols.certainty).trim();
-    var withinFive = data.getData(i, cols.withinFive).trim();
-    var estrus = data.getData(i, cols.estrus).trim();
-    var closest = data.getData(i, cols.closest).trim();
-    var focalChimpId = data.getData(i, cols.focalId).trim();
-    var date = data.getData(i, cols.date).trim();
-    var followStartTime = data.getData(i, cols.followStartTime).trim();
-
-    var newChimp = new models.Chimp(
-        rowId,
-        date,
-        followStartTime,
-        focalChimpId,
-        chimpId,
-        time,
-        certainty,
-        withinFive,
-        estrus,
-        closest
-    );
-
-    result.push(newChimp);
-
-  }
-
-  return result;
-
-};
-
-
-/**
- * Convert a TableData object to a list of Follow objects.
- */
-exports.convertTableDataToFollows = function convertTableDataToFollows(data) {
-  var result = [];
-
-  var cols = tables.follow.columns;
-
-  if (!data) {
-    return result;
-  }
-
-  for (var i = 0; i < data.getCount(); i++) {
-    var date = data.getData(i, cols.date);
-    var beginTime = data.getData(i, cols.beginTime);
-    var focalId = data.getData(i, cols.focalId);
-    var communityId = data.getData(i, cols.communityId);
-    var researcher = data.getData(i, cols.researcher);
-
-    var follow = new models.Follow(
-        date,
-        beginTime,
-        focalId,
-        communityId,
-        researcher
-    );
-
-    result.push(follow);
-  }
-
-  return result;
-};
-
-
-exports.getFoodDataForTimePoint = function(date, timeBegin, focalChimpId) {
-
-  var table = tables.food;
-
-  var whereClause = exports.createWhereClause(
-    [
-      table.columns.date,
-      table.columns.focalId,
-      table.columns.timeBegin
-    ]
-  );
-
-  var selectionArgs = [date, focalChimpId, timeBegin];
-
-  var result = control.query(
-      table.tableId,
-      whereClause,
-      selectionArgs
-  );
-
-  return result;
-
-};
-
-exports.getFoodDataForDate = function(control, date, focalChimpId) {
-
-  var table = tables.food;
-
-  var whereClause = exports.createWhereClause(
-    [
-      table.columns.date,
-      table.columns.focalId
-    ]
-  );
-
-  var selectionArgs = [date, focalChimpId];
-
-  var result = control.query(
-      table.tableId,
-      whereClause,
-      selectionArgs
-  );
-
-  return result;
-
-};
-
-exports.getSpeciesDataForTimePoint = function(date, timeBegin, focalChimpId) {
-
-  var table = tables.species;
-
-  var whereClause = exports.createWhereClause(
-    [
-      table.columns.date,
-      table.columns.focalId,
-      table.column.timeBegin
-    ]
-  );
-
-  var selectionArgs = [date, focalChimpId, timeBegin];
-
-  var result = control.query(
-      table.tableId,
-      whereClause,
-      selectionArgs
-  );
-
-  return result;
-
-};
-
-exports.getSpeciesDataForDate = function(control, date, focalChimpId) {
-
-  var table = tables.species;
-
-  var whereClause = exports.createWhereClause(
-    [
-      table.columns.date,
-      table.columns.focalId,
-    ]
-  );
-
-  var selectionArgs = [date, focalChimpId];
-
-  var result = control.query(
-      table.tableId,
-      whereClause,
-      selectionArgs
-  );
-
-  return result;
-
-};
-
-/**
- * Get a query for all the data at the given date and time for all
- * the chimps
- */
-exports.getUpdateAboutAllChimps = function(date, time) {
-
-  var table = tables.followArrival;
-
-  var whereClause = exports.createWhereClause(
-    [
-      table.columns.date,
-      table.columns.time,
-    ]
-  );
-
-  var selectionArgs = [date, time];
-
-  var result = control.query(
-      table.tableId,
-      whereClause,
-      selectionArgs
-  );
-
-  return result;
-
-};
-
-
-/**
- * Return an array of all the Follow objects in the database.
- *
- * Note that this returns actual Follow objects, NOT a TableData object
- * containing all follows.
- */
-exports.getAllFollows = function getAllFollows(control) {
-  var table = tables.follow;
-
-  var tableData = control.query(table.tableId, null, null);
-
-  var result = exports.convertTableDataToFollows(tableData);
-  return result;
-};
-
-
-/**
- * Get the Follow for the given date and focal chimp.
- */
-exports.getFollowForDateAndChimp = function(control, date, focalId) {
-  var table = tables.follow;
-  var cols = table.columns;
-
-  var whereClause = exports.createWhereClause(
-    [
-      cols.date,
-      cols.focalId
-    ]
-  );
-  var selectionArgs = [date, focalId];
-
-  var tableData = control.query(
-      table.tableId,
-      whereClause,
-      selectionArgs
-  );
-
-  var result = exports.convertTableDataToFollows(tableData);
-  return result;
-};
-
-/**
- * Write a follow object (as defined in the models module).
- */
-exports.writeNewFollow = function(control, follow) {
-
-  var table = tables.follow;
-  var cols = table.columns;
-  
-  var struct = {};
-
-  struct[cols.date] = follow.date;
-  struct[cols.beginTime] = follow.beginTime;
-  struct[cols.focalId] = follow.focalId;
-  struct[cols.communityId] = follow.communityId;
-  struct[cols.researcher] = follow.researcher;
-
-  var stringified = JSON.stringify(struct);
-
-  control.addRow(table.tableId, stringified);
-
-};
-
-
-/**
- * Write a row for the chimp into the database.
- *
- * If isUpdate is truthy, it instead updates, rather than adds a rwo, and the
- * rowId property of the chimp must be valid.
- */
-exports.writeRowForChimp = function(control, chimp, isUpdate) {
-
-  var table = tables.chimpObservation;
-  var cols = table.columns;
-
-  // We're going to assume that all variable have a value. In otherwords, there
-  // can be no defaults that are cannot be written to the database. We write
-  // every value.
-  var struct = {};
-  struct[cols.date] = chimp.date;
-  struct[cols.followStartTime] = chimp.followStartTime;
-  struct[cols.time] = parseInt(chimp.time);
-  struct[cols.focalId] = chimp.focalChimpId;
-  struct[cols.chimpId] = chimp.chimpId;
-  struct[cols.certainty] = parseInt(chimp.certainty);
-  struct[cols.withinFive] = parseInt(chimp.withinFive);
-  struct[cols.closest] = parseInt(chimp.closest);
-  struct[cols.estrus] = chimp.estrus;
-
-  var stringified = JSON.stringify(struct);
-
-  if (isUpdate) {
-    var rowId = chimp.rowId;
-    if (!rowId) {
-      throw new Error('chimp.rowId was falsey!');
-    }
-    control.updateRow(table.tableId, stringified, rowId);
-  } else {
-    control.addRow(table.tableId, stringified);
-  }
-
-};
-
-
-/**
- * Update an array of Chimp objects based on an existing time point. If
- * isRetroactive is true, it implies that this is being performed after a time
- * point has already had data filled out manually, rather than being seen for
- * the first time. In this case the chimp is updated if:
- * 1) the current chimp was absent
- * 2) prev is absent or departed and curr is not arrived (b/c a chimp must
- * arrive before it can be present)
- */
-exports.updateChimpsForPreviousTimepoint = function(
-    prev,
-    curr,
-    isRetroactive
-) {
-  if (prev.length === 0) {
-    return curr;
-  } else if (prev.length !== curr.length) {
-    throw new Error('previous and current chimps not the same size');
-  }
-
-  var prevMap = {};
-  var currMap = {};
-
-  for (var i = 0; i < prev.length; i++) {
-    var prevChimpId = prev[i].chimpId;
-    var currChimpId = curr[i].chimpId;
-    prevMap[prevChimpId] = prev[i];
-    currMap[currChimpId] = curr[i];
-  }
-
-  var result = [];
-  prev.forEach(function(chimp) {
-    var chimpId = chimp.chimpId;
-    var prevChimp = prevMap[chimpId];
-    var currChimp = currMap[chimpId];
-    if (!prevChimp || !currChimp) {
-      throw new Error('did not find prev or curr chimp with id: ' + chimpId);
-    }
-
-    // Handle the case for going back in time and adding a chimp retroactively.
-    // In this case we want to overwrite ONLY the chimps that are not present
-    // now but were present in the previous timepoint. This will prevent
-    // overwriting previously manually entered data, which would happen if we
-    // did a raw update.
-    if (isRetroactive) {
-      if (currChimp.time === exports.timeLabels.absent) {
-        result.push(
-          exports.updateChimpForPreviousTimepoint(prevChimp, currChimp)
-        );
-      } else if (
-          chimpIsDepartedOrAbsent(prevChimp) &&
-          !chimpIsArrived(currChimp)
-      ) {
-        result.push(
-            exports.updateChimpForPreviousTimepoint(prevChimp, currChimp)
-        );
-      } else {
-        result.push(currChimp);
-      }
-    } else {
-      result.push(
-          exports.updateChimpForPreviousTimepoint(prevChimp, currChimp)
-      );
-    }
-  });
-
-  return result;
-};
-
-
-exports.updateChimpForPreviousTimepoint = function(prev, curr) {
-  if (!prev || !curr) {
-    throw new Error('prev and curr chimps must be truthy');
-  }
-
-  if (prev.chimpId !== curr.chimpId) {
-    throw new Error('chimp ids must be identical to update');
-  }
-
-  // The mapping for certainty updates is basically that they remain the same,
-  // except that if it is a nest observation it updates to no nest.
-  var prevCertainty = prev.certainty;
-  var currCertainty = prevCertainty; // sensible default in case of error
-  if (prevCertainty === exports.certaintyLabels.certain) {
-    currCertainty = prevCertainty;
-  } else if (prevCertainty === exports.certaintyLabels.uncertain) {
-    currCertainty = prevCertainty;
-  } else if (prevCertainty === exports.certaintyLabels.nestCertain) {
-    currCertainty = exports.certaintyLabels.certain;
-  } else if (prevCertainty === exports.certaintyLabels.nestUncertain) {
-    currCertainty = exports.certaintyLabels.uncertain;
-  } else {
-    console.log('E: previous certainty not handled: ' + prevCertainty);
-    currCertainty = prevCertainty;
-  }
-  curr.certainty = currCertainty;
-
-  curr.estrus = prev.estrus;
-
-  // chimp was there in the last time slot, update to continuing
-  if (prev.time === exports.timeLabels.arriveThird ||
-      prev.time === exports.timeLabels.arriveSecond ||
-      prev.time === exports.timeLabels.arriveFirst ||
-      prev.time === exports.timeLabels.continuing
-  ) {
-    curr.time = exports.timeLabels.continuing;
-  } else if (chimpIsDepartedOrAbsent(prev) && !chimpIsArrived(curr)) {
-    // A chimp must be absent if it was previously absent or departed, and  the
-    // current chimp is NOT arrived. This prevents valid data from being
-    // overridden. E.g. without the !arrived check, you would overwrite all
-    // valid original arrivals
-    curr.time = exports.timeLabels.absent;
-  }
-
-  return curr;
-};
-
-
-/**
- * Write a row for the food item into the database.
- *
- * If isUpdate is truthy, it instead updates, rather than adds, a row, and the
- * rowId property of the food must be valid.
- */
-exports.writeRowForFood = function(control, food, isUpdate) {
-  var table = tables.food;
-  var cols = table.columns;
-
-  var struct = {};
-  struct[cols.focalId] = food.focalChimpId;
-  struct[cols.date] = food.date;
-  struct[cols.foodName] = food.foodName;
-  struct[cols.foodPart] = food.foodPartEaten;
-  struct[cols.startTime] = food.startTime;
-  struct[cols.endTime] = food.endTime;
-
-  var stringified = JSON.stringify(struct);
-
-  if (isUpdate) {
-    var rowId = food.rowId;
-    if (!rowId) {
-      throw new Error('food.rowId was falsey!');
-    }
-    control.updateRow(table.tableId, stringified, rowId);
-  } else {
-    control.addRow(table.tableId, stringified);
-  }
-};
-
-
-/**
- * Write a row for the species into the database.
- *
- * If isUpdate is truthy, update, rather than add a row. In the case of an
- * update the rowId property of the species must be valid.
- */
-exports.writeRowForSpecies = function(control, species, isUpdate) {
-  var table = tables.species;
-  var cols = table.columns;
-
-  var struct = {};
-  struct[cols.focalId] = species.focalChimpId;
-  struct[cols.date] = species.date;
-  struct[cols.speciesName] = species.speciesName;
-  struct[cols.speciesCount] = species.number;
-  struct[cols.startTime] = species.startTime;
-  struct[cols.endTime] = species.endTime;
-
-  var stringified = JSON.stringify(struct);
-
-  if (isUpdate) {
-    var rowId = species.rowId;
-    if (!rowId) {
-      throw new Error('species.foodId was falsey');
-    }
-    control.updateRow(table.tableId, stringified, rowId);
-  } else {
-    control.addRow(table.tableId, stringified);
-  }
-};
-
-},{"./jgiModels":3,"./jgiTables":4}],2:[function(require,module,exports){
-'use strict';
-
-var $ = require('jquery');
-var urls = require('./jgiUrls');
-
-
-exports.DO_LOGGING = true;
-
-
-exports.getFollowRepresentation = function() {
-  var followDate = urls.getFollowDateFromUrl();
-  var focalId = urls.getFocalChimpIdFromUrl();
-  var intervalStart = urls.getFollowTimeFromUrl();
-  var result = followDate + ' ' + focalId + ' ' + intervalStart;
-  return result;
-};
-
-
-
-exports.initializeClickLogger = function() {
-  $('button, select, option, input').click(function() {
-    if (!exports.DO_LOGGING) {
-      return;
-    }
-
-    var followRepresentation = exports.getFollowRepresentation();
-
-    var $thisObj = $(this);
-    var now = new Date().toISOString();
-    console.log(
-      ' jgiLogging: ' +
-      now +
-      ' clickId: ' +
-      $thisObj.prop('id') +
-      ' elementName: ' +
-      $thisObj.get(0).tagName +
-      ' followInfo: ' +
-      followRepresentation
-    );
-  });
-
-};
-
-exports.initializeLogging = function() {
-  exports.initializeClickLogger();
-};
-
-},{"./jgiUrls":5,"jquery":7}],3:[function(require,module,exports){
-'use strict';
-
-/**
- * The models we will use for rows in the database.
- */
-
-var util = require('./jgiUtil');
-
-
-/**
- * A follow, which includes a set of timepoints, where each time point has a
- * set of observations about chimps.
- */
-exports.Follow = function Follow(
-    date,
-    beginTime,
-    focalId,
-    communityId,
-    researcher
-) {
-
-  if (!(this instanceof Follow)) {
-    throw new Error('must use new');
-  }
-  
-  this.date = date;
-  this.beginTime = beginTime;
-  this.focalId = focalId;
-  this.communityId = communityId;
-  this.researcher = researcher;
-
-};
-
-
-/**
- * Represents an interval in a follow. This is essentially a subset of the
- * information pertaining to a particular chimp during the follow. A
- * FollowInterval might represent the time between 7:15 and 7:30 of a
- * particular longer Follow, for instance.
- *
- * In an effort to make this even clearer, this object has been fabricated in
- * order to allow someone to view a list of the timepoints they've seen during
- * their Follow in order to quickly jump between them or resume where they left
- * off in event of an app crash.
- */
-exports.FollowInterval = function FollowInterval(
-    date,
-    beginTime,
-    focalId
-) {
-  if (!(this instanceof FollowInterval)) {
-    throw new Error('must use new');
-  }
-
-  this.date = date;
-  this.beginTime = beginTime;
-  this.focalId = focalId;
-};
-
-
-/**
- * The observation of a chimp in the a particular timepoint.
- */
-exports.Chimp = function Chimp(
-    rowId,
-    date,
-    followStartTime,
-    focalChimpId,
-    chimpId,
-    time,
-    certainty,
-    withinFive,
-    estrus,
-    closest
-) {
-
-  if (!(this instanceof Chimp)) {
-    throw new Error('must use new');
-  }
-
-  // for our model only--can be undefined
-  this.rowId = rowId;
-
-  // data that we must set.
-  this.date = date;
-  this.followStartTime = followStartTime;
-  this.focalChimpId = focalChimpId;
-  this.chimpId = chimpId;
-  this.time = time;
-  this.certainty = certainty;
-  this.withinFive = withinFive;
-  this.estrus = estrus;
-  this.closest = closest;
-
-};
-
-
-/**
- * Create a chimp with the default values. This is ok to represent a chimp that
- * has not been observed at a given timepoint.
- */
-exports.createNewChimp = function(
-    date,
-    followStartTime,
-    focalChimpId,
-    chimpId
-) {
-  var defTime = '0';
-  var defCertainty = '1';
-  var defWithinFive = '0';
-  var defEstrus = '0';
-  var defClosest = '0';
-
-  // We don't know the row id when we are creating the chimps. We have to get
-  // it from the database after writing. This is annoying...maybe we can start
-  // creating the row ids and passing them in? TODO
-  var rowId = null;
-
-  // We have to be careful here--the new binding might fail since it is owned
-  // by the exports object. I forget precisely how this works. If weird stuff
-  // is happening, make sure the context object making it to the Chimp
-  // constructor is a new object here.
-  var result = new exports.Chimp(
-      rowId,
-      date,
-      followStartTime,
-      focalChimpId,
-      chimpId,
-      defTime,
-      defCertainty,
-      defWithinFive,
-      defEstrus,
-      defClosest
-  );
-
-  return result;
-
-};
-
-
-/**
- * The observation of a food item.
- */
-exports.Food = function Food(
-    rowId,
-    date,
-    focalChimpId,
-    startTime,
-    endTime,
-    foodName,
-    foodPartEaten
-) {
-  if (!(this instanceof Food)) {
-    throw new Error('must use new');
-  }
-
-  // Can be undefined as long as creating a row for the first time
-  this.rowId = rowId;
-
-  this.date = date;
-  this.startTime = startTime;
-  this.foodName = foodName;
-  this.foodPartEaten = foodPartEaten;
-  this.endTime = endTime;
-  this.focalChimpId = focalChimpId;
-};
-
-
-/**
- * Create a new food observation. Sets rowId to null and endTime to the not
- * set flag.
- */
-exports.createNewFood = function(
-    date,
-    focalChimpId,
-    startTime,
-    foodName,
-    foodPartEaten
-) {
-  var rowId = null;
-  var result = new exports.Food(
-      rowId,
-      date,
-      focalChimpId,
-      startTime,
-      util.flagEndTimeNotSet,
-      foodName,
-      foodPartEaten
-  );
-  return result;
-};
-
-
-/**
- * The observation of a species.
- */
-exports.Species = function Species(
-    rowId,
-    date,
-    focalChimpId,
-    startTime,
-    endTime,
-    speciesName,
-    number
-) {
-  if (!(this instanceof Species)) {
-    throw new Error('must use new');
-  }
-
-  this.rowId = rowId;
-
-  this.date = date;
-  this.focalChimpId = focalChimpId;
-  this.startTime = startTime;
-  this.endTime = endTime;
-  this.speciesName = speciesName;
-  this.number = number;
-};
-
-
-/**
- * Create a new species observation. Sets rowId to null and endTime to the not
- * set flag.
- */
-exports.createNewSpecies = function(
-    date,
-    focalChimpId,
-    startTime,
-    speciesName,
-    number
-) {
-  var rowId = null;
-  var result = new exports.Species(
-      rowId,
-      date,
-      focalChimpId,
-      startTime,
-      util.flagEndTimeNotSet,
-      speciesName,
-      number
-  );
-  return result;
-};
-
-},{"./jgiUtil":6}],4:[function(require,module,exports){
-'use strict';
-
-/**
- * Identifiers about the tables we'll need to use for the JGI app.
- */
-
-exports.chimpObservation = {
-  tableId: 'follow_arrival',
-  columns: {
-    date: 'FA_FOL_date',
-    followStartTime: 'FA_time_start',
-    time: 'FA_duration_of_obs',
-    focalId: 'FA_FOL_B_focal_AnimID',
-    chimpId: 'FA_B_arr_AnimID',
-    certainty: 'FA_type_of_certainty',
-    withinFive: 'FA_within_five_meters',
-    closest: 'FA_closest_to_focal',
-    estrus: 'FA_type_of_cycle'
-  }
-};
-
-exports.species = {
-  tableId: 'other_species',
-  columns: {
-    startTime: 'OS_time_begin',
-    endTime: 'OS_time_end',
-    focalId: 'OS_FOL_B_focal_AnimID',
-    speciesName: 'OS_local_species_name_written',
-    speciesCount: 'OS_duration',
-    date: 'OS_FOL_date'
-  }
-};
-
-exports.food = {
-  tableId: 'food_bout',
-  columns: {
-    date: 'FB_FOL_date',
-    focalId: 'FB_FOL_B_AnimID',
-    foodName: 'FB_FL_local_food_name',
-    foodPart: 'FB_FPL_local_food_part',
-    startTime: 'FB_begin_feed_time',
-    endTime: 'FB_end_feed_time'
-  }
-};
-
-exports.follow = {
-  tableId: 'follow',
-  columns: {
-    date: 'FOL_date',
-    focalId: 'FOL_B_AnimID',
-    communityId: 'FOL_CL_community_id',
-    beginTime: 'FOL_time_begin',
-    researcher: 'FOL_am_observer1'
-  }
-};
-
-},{}],5:[function(require,module,exports){
-'use strict';
-
-/**
- * Functions for manipulating URLs in the JGI app.
- */
-
-/**
- * Query parameters we expect on URLs e.g. '?date=BLAH'.
- */
-exports.queryParameters = {
-  date: 'follow_date',
-  time: 'follow_time',
-  focalChimp: 'focal_chimp',
-
-  beginToEat: 'begin_eating',
-  eatenFood: 'eaten_food',
-  eatenFoodPart: 'eaten_foodPart',
-
-  timeOfPresence: 'time_presence',
-  speciesName: 'name_species',
-  numOfSpecies: 'num_of_species',
-  isReview: 'review',
-
-  community: 'community',
-};
-
-
-/**
- * Get the query parameter from the url. Note that this is kind of a hacky/lazy
- * implementation that will fail if the key string appears more than once, etc.
- */
-exports.getQueryParameter = function(key) {
-  var href = document.location.search;
-  var startIndex = href.search(key);
-  if (startIndex < 0) {
-    console.log('[jgiUrls.js] requested query parameter not found: ' + key);
-    return null;
-  }
-  // Then we want the substring beginning after "key=".
-  var indexOfValue = startIndex + key.length + 1;  // 1 for '='
-  // And now it's possible that we have more than a single url parameter, so
-  // only take as many characters as we need. We'll stop at the first &,
-  // which is what specifies more keys.
-  var fromValueOnwards = href.substring(indexOfValue);
-  var stopAt = fromValueOnwards.search('&');
-  if (stopAt < 0) {
-    return decodeURIComponent(fromValueOnwards);
-  } else {
-    return decodeURIComponent(fromValueOnwards.substring(0, stopAt));
-  }
-};
-
-exports.createParamsForFollow = function(date, time, focalChimp, community) {
-
-  var result =
-    '?' +
-    exports.queryParameters.date +
-    '=' +
-    encodeURIComponent(date) +
-    '&' +
-    exports.queryParameters.time +
-    '=' +
-    encodeURIComponent(time) +
-    '&' +
-    exports.queryParameters.focalChimp +
-    '=' +
-    encodeURIComponent(focalChimp) +
-    '&' +
-    exports.queryParameters.community +
-    '=' +
-    encodeURIComponent(community);
-  return result;
-
-};
-exports.createParamsForIsReview = function(isReview) {
-  var result =
-    '?' +
-    exports.queryParameters.isReview +
-    '=' +
-    encodeURIComponent(isReview);
-
-  return result;
-};
-
-exports.isReviewMode = function(){
-  var result = exports.getQueryParameter(exports.queryParameters.isReview);
-  return result;
-};
-
-exports.createParamsForFood = function(
-    date,
-    time,
-    focalChimp,
-    beginToEat,
-    food,
-    foodPart
-) {
-
-  var result = exports.createParamsForFollow(date, time, focalChimp);
-  result +=
-    '&' +
-    exports.queryParameters.beginToEat +
-    '=' +
-    encodeURIComponent(beginToEat) +
-    '&' +
-    exports.queryParameters.eatenFood +
-    '=' +
-    encodeURIComponent(food) +
-    '&' +
-    exports.queryParameters.eatenFoodPart +
-    '=' +
-    encodeURIComponent(foodPart);
-
-  return result;
-
-};
-
-exports.createParamsForSpecies = function(
-    date,
-    time,
-    focalChimp,
-    timeOfPresence,
-    speciesName,
-    numOfSpecies
-) {
-
-  var result = exports.createParamsForFollow(date, time, focalChimp);
-  result +=
-    '&' +
-    exports.queryParameters.timeOfPresence +
-    '=' +
-    encodeURIComponent(timeOfPresence) +
-    '&' +
-    exports.queryParameters.speciesName +
-    '=' +
-    encodeURIComponent(speciesName) +
-    '&' +
-    exports.queryParameters.numOfSpecies +
-    '=' +
-    encodeURIComponent(numOfSpecies);
-
-  return result;
-
-};
-
-
-exports.getFollowTimeFromUrl = function() {
-
-  var result = exports.getQueryParameter(exports.queryParameters.time);
-  return result;
-
-};
-
-
-exports.getFollowDateFromUrl = function() {
-
-  var result = exports.getQueryParameter(exports.queryParameters.date);
-  return result;
-
-};
-
-
-exports.getFocalChimpIdFromUrl = function() {
-
-  var result = exports.getQueryParameter(exports.queryParameters.focalChimp);
-  return result;
-
-};
-
-exports.getCommunityFromUrl = function() {
-
-  var result = exports.getQueryParameter(exports.queryParameters.community);
-  return result;
-}
-
-},{}],6:[function(require,module,exports){
-'use strict';
-
-// This is the strange list of times that Ian wants to use. A and J for am/pm
-// but in the Swahili form. The strange looping of times is something to do
-// with how local time is kept.
-var times = [
-  '00-12:00A',
-  '01-12:15A',
-  '02-12:30A',
-  '03-12:45A',
-  '04-1:00A',
-  '05-1:15A',
-  '06-1:30A',
-  '07-1:45A',
-  '08-2:00A',
-  '09-2:15A',
-  '10-2:30A',
-  '11-2:45A',
-  '12-3:00A',
-  '13-3:15A',
-  '14-3:30A',
-  '15-3:45A',
-  '16-4:00A',
-  '17-4:15A',
-  '18-4:30A',
-  '19-4:45A',
-  '20-5:00A',
-  '21-5:15A',
-  '22-5:30A',
-  '23-5:45A',
-  '24-6:00J',
-  '25-6:15J',
-  '26-6:30J',
-  '27-6:45J',
-  '28-7:00J',
-  '29-7:15J',
-  '30-7:30J',
-  '31-7:45J',
-  '32-8:00J',
-  '33-8:15J',
-  '34-8:30J',
-  '35-8:45J',
-  '36-9:00J',
-  '37-9:15J',
-  '38-9:30J',
-  '39-9:45J',
-  '40-10:00J',
-  '41-10:15J',
-  '42-10:30J',
-  '43-10:45J',
-  '44-11:00J',
-  '45-11:15J',
-  '46-11:30J',
-  '47-11:45J',
-  '48-12:00J',
-  '49-12:15J',
-  '50-12:30J',
-  '51-12:45J',
-  '52-1:00J',
-  '53-1:15J',
-  '54-1:30J',
-  '55-1:45J',
-  '56-2:00J',
-  '57-2:15J',
-  '58-2:30J',
-  '59-2:45J'
-];
-
-
-function sortItemsWithDate(objects) {
-  objects.sort(function(a, b) {
-    if (a.date < b.date) {
-      return -1;
-    } else if (a.date > b.date) {
-      return 1;
-    } else {
-      return 0;
-    }
-  });
-}
-
-/**
- * A flag to be used for end time on species and food observations in the case
- * that an end time has not yet been set.
- */
-exports.flagEndTimeNotSet = 'ongoing';
-
-
-/**
- * Return an array of all the times that will be stored in the database. These
- * are not user-facing, but are intended to be stored in the database
- * representing a particular time.
- */
-exports.getAllTimesForDb = function() {
-  // return a defensive copy
-  return times.slice();
-};
-
-
-/**
- * Convert a user time to its db representation.
- */
-exports.getDbTimeFromUserTime = function(userTime) {
-  var userTimes = exports.getAllTimesForUser();
-
-  var index = userTimes.indexOf(userTime);
-  if (index < 0) {
-    throw 'cannot find user time: ' + userTime;
-  }
-
-  return exports.getAllTimesForDb()[index];
-};
-
-
-/**
- * Convert a time like '14.01-12:12J' to a completely user-facing time.
- */
-exports.getUserTimeFromDbTime = function(dbTime) {
-  var dashIndex = dbTime.indexOf('-');
-  var result = dbTime.substring(dashIndex + 1);
-  return result;
-};
-
-
-/**
- * Return an array of all user-facing time labels. These are the user-facing
- * strings corresponding to the database-facing strings returned by
- * getAllTimesForDb.
- */
-exports.getAllTimesForUser = function() {
-  var result = [];
-  times.forEach(function(val) {
-    // We expect something like 01-12:00J, so find the first - and take
-    // everything after that.
-    var dashIndex = val.indexOf('-');
-    var userTime = val.substring(dashIndex + 1);
-    result.push(userTime);
-  });
-  return result;
-};
-
-
-/**
- * Sort the array of Follow objects.
- */
-exports.sortFollows = function(follows) {
-  sortItemsWithDate(follows);
-};
-
-
-exports.sortFollowIntervals = function(intervals) {
-  sortItemsWithDate(intervals);
-};
-
-
-/**
- * Return the next time point from the given database-facing time. Throws an
- * error if canIncrementTime returns false.
- */
-exports.incrementTime = function(time) {
-  if (!exports.canIncrementTime(time)) {
-    throw 'cannot increment time: ' + time;
-  }
-  var index = times.indexOf(time);
-  var result = times[index + 1];
-  return result;
-};
-
-
-/**
- * Take a database-facing time (e.g. 05-12:12J) and return an array of objects
- * with a 'dbTime' and 'userTime' value, corresponding to time points in the
- * interval specified by the dbTime parameter.
- *
- * The dbTime keys will have the prefix include '.00' to '.14' to accommodate
- * direct string comparisons. For instance, the time '00-12:00A' would return
- * an array like:
- * [
- *   {dbTime: 00.00-12:00A, userTime: 12:00A},
- *   {dbTime: 00.01-12:01A, userTime: 12:01A},
- *   ...
- *   {dbTime: 00.14-12:14A, userTime: 12:14A}
- * ]
- */
-exports.getDbAndUserTimesInInterval = function(dbTime) {
-  var dashIndex = dbTime.indexOf('-');
-  var colonIndex = dbTime.indexOf(':');
-
-  var prefix = dbTime.substring(0, dashIndex);
-  var hour = dbTime.substring(dashIndex + 1, colonIndex);
-  var mins = dbTime.substring(colonIndex + 1, colonIndex + 3);
-  // Everything at the end.
-  var period = dbTime.substring(colonIndex + 3);
-
-  var result = [];
-
-  for (var i = 0; i < 15; i++) {
-    var minsNum = Number(mins);
-    minsNum += i;
-    
-    var newMins;
-    if (minsNum < 10) {
-      newMins = '0' + String(minsNum);
-    } else {
-      newMins = String(minsNum);
-    }
-
-    var suffix;
-    if (i < 10) {
-      suffix = '0' + String(i);
-    } else {
-      suffix = String(i);
-    }
-
-    var newUserTime = hour + ':' + newMins + period;
-    var newPrefix = prefix + '.' + suffix;
-    var newDbTime = newPrefix + '-' + newUserTime;
-
-    var timePoint = {};
-    timePoint.dbTime = newDbTime;
-    timePoint.userTime = newUserTime;
-    result.push(timePoint);
-  }
-
-  return result;
-};
-
-
-/**
- * True if the two times represent a negative duration, else False. Returns
- * true also if either startDb or endDb is not truthy.
- *
- * Expects times to be in their db format, e.g. 13.01-12:00J.
- */
-exports.isNegativeDuration = function(startDb, endDb) {
-  if (!startDb || !endDb) {
-    return true;
-  }
-  
-  var startPrefix = startDb.substring(0, startDb.indexOf('-'));
-  var endPrefix = endDb.substring(0, endDb.indexOf('-'));
-
-  var startNum = Number(startPrefix);
-  var endNum = Number(endPrefix);
-
-  return endNum < startNum;
-};
-
-
-/**
- * Return ['hh', '00', '01', ..., '23'].
- */
-exports.getAllHours = function() {
-  var result = ['hh'];
-  for (var i = 0; i < 24; i++) {
-    var hour = exports.convertToStringWithTwoZeros(i);
-    result.push(hour);
-  }
-  return result;
-};
-
-
-/**
- * Return ['mm', '01', '02', ..., '59']
- */
-exports.getAllMinutes = function() {
-  var result = ['mm'];
-  for (var i = 0; i < 60; i++) {
-    var mins = exports.convertToStringWithTwoZeros(i);
-    result.push(mins);
-  }
-  return result;
-};
-
-
-/**
- * True if parseInt will succeed.
- */
-exports.isInt = function(val) {
-  // This is kind of hacky, but it will do for converting from user input.
-  return val !== '' && !isNaN(val);
-};
-
-
-exports.canIncrementTime = function(time) {
-  var index = times.indexOf(time);
-  if (index < 0 || index === times.length) {
-    return false;
-  } else {
-    return true;
-  }
-};
-
-
-exports.canDecrementTime = function(time) {
-  var index = times.indexOf(time);
-  if (index < 0 || index === 0) {
-    return false;
-  } else {
-    return true;
-  }
-};
-
-
-/**
- * Return the previous time point for the given database-facing time. Throws an
- * error if canDecrementTime returns False.
- */
-exports.decrementTime = function(time) {
-  if (!exports.canDecrementTime(time)) {
-    throw 'cannot decrement time: ' + time;
-  }
-  var index = times.indexOf(time);
-  return times[index - 1];
-};
-
-
-/**
- * Convert an integer to a string, padded to two zeros.
- */
-exports.convertToStringWithTwoZeros = function(intTime) {
-
-  if (intTime > 59) {
-    throw new Error('invalid intTime: ' + intTime);
-  }
-
-  var result;
-  if (intTime < 10) {
-    result = '0' + intTime;
-  } else {
-    result = intTime.toString();
-  }
-  return result;
-
-};
-
-},{}],7:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v2.2.3
  * http://jquery.com/
@@ -11430,2371 +9842,1688 @@ if ( !noGlobal ) {
 return jQuery;
 }));
 
-},{}],"jgiFollow":[function(require,module,exports){
-/* global confirm */
+},{}],2:[function(require,module,exports){
+/* global control */
 'use strict';
 
-/**
- * Code for dealing with the follow screen, in particular the UI.
- */
-
-var urls = require('./jgiUrls');
+var tables = require('./jgiTables');
 var models = require('./jgiModels');
-var db = require('./jgiDb');
-var $ = require('jquery');
-var util = require('./jgiUtil');
-var logging = require('./jgiLogging');
 
-var FLAG_PLACE_HOLDER_TIME = 's:dk';
-var FOOD_LIST_COOKIE = "JGIRecentFoodsList";
-var RECENT_FOODS_MAX = 10;
-
-
-/**
- * We have to store the actual number of the species in the db as integers, but
- * we want to represent ranges.
- */
-var speciesNumberLabelsUser = {
-  '1': '1',
-  '2': '2-9',
-  '10': '10-19',
-  '20': '20+'
+exports.certaintyLabels = {
+  certain: '1',
+  uncertain: '2',
+  nestCertain: '3',
+  nestUncertain: '4'
 };
 
 
 /**
- * Get the user-facing label for a given db-safe species number.
+ * True if the chimp has departed or is absent, else false.
  */
-function getSpeciesNumberUserLabel(dbNumber) {
-  return speciesNumberLabelsUser[dbNumber];
-}
-
-function assertIsChimp(chimp) {
-  if (chimp.constructor.name !== 'Chimp') {
-    throw new Error('parameter must be a chimp');
-  }
+function chimpIsDepartedOrAbsent(chimp) {
+  return chimp.time === exports.timeLabels.absent ||
+    chimp.time === exports.timeLabels.departFirst ||
+    chimp.time === exports.timeLabels.departSecond ||
+    chimp.time === exports.timeLabels.departThird;
 }
 
 
 /**
- * Return an array of Chimp objects for the time before this one, returns an
- * empty array if no data or if can't be decremented.
+ * True if the chimp has arrived, else false.
  */
-function getChimpsForPreviousTimepoint(control, currentTime, date, focalId) {
-  if (!util.canDecrementTime(currentTime)) {
-    return [];
-  }
-  var prevTime = util.decrementTime(currentTime);
-  var prevTableData = db.getTableDataForTimePoint(
-      control,
-      date,
-      prevTime,
-      focalId
-  );
-
-  var result = db.convertTableDataToChimps(prevTableData);
-  return result;
-}
-
-
-function assertFoundChimp(chimp) {
-  if (!chimp) {
-    console.log('could not find selected chimp!');
-    window.alert('could not find selected chimp!');
-    throw new Error('could not find selected chimp');
-  }
+function chimpIsArrived(chimp) {
+  return chimp.time === exports.timeLabels.arriveFirst ||
+    chimp.time === exports.timeLabels.arriveSecond ||
+    chimp.time === exports.timeLabels.arriveThird;
 }
 
 
 /**
- * Append all valid minutes for this time as options to the $select.
+ * Database-facing labels for arrival and departures.
  */
-function appendTimesToSelect($select) {
-  var currentTime = urls.getFollowTimeFromUrl();
-  var validTimes = util.getDbAndUserTimesInInterval(currentTime);
-  // The first value we want to be the place holder time.
-  var placeHolderTime = {};
-  placeHolderTime.dbTime = FLAG_PLACE_HOLDER_TIME;
-  placeHolderTime.userTime = FLAG_PLACE_HOLDER_TIME;
-  validTimes.unshift(placeHolderTime);
-  validTimes.forEach(function(time) {
-    var option = $('<option></option>');
-    option.attr('value', time.dbTime);
-    option.text(time.userTime);
-    $select.append(option);
-  });
-}
-
-
-/**
- * Create the id for the element representing the chimp's presence.
- */
-function getIdForTimeImage(chimp) {
-  return chimp.chimpId + '_time_img';
-}
-
-
-/**
- * Create the id for the element containing the image showing
- * arrival/departure.
- */
-function getIdForTime(chimp) {
-  return chimp.chimpId + '_time';
-}
-
-
-/**
- * Create the id for the certainty item.
- */
-function getIdForCertainty(chimp) {
-  return chimp.chimpId + '_cer';
-}
-
-
-/**
- * Get the id for the element representing whether the chimp is within 5m of
- * the focal chimp.
- */
-function getIdForWithinFiveMeters(chimp) {
-  return chimp.chimpId + '_five';
-}
-
-
-/**
- * Get the id for the element representing the chimp's estrus state.
- */
-function getIdForEstrus(chimp) {
-  return chimp.chimpId + '_sexState';
-}
-
-
-/**
- * Get the id for the element displaying whether or not the chimp is cloest to
- * focal.
- */
-function getIdForClosest(chimp) {
-  return chimp.chimpId + '_close';
-}
-
-
-/**
- * Show the food editing div, hiding the species and chimps.
- */
-function showFood() {
-  $('.container').addClass('nodisplay');
-  $('.species-container').addClass('nodisplay');
-  $('.food-container').removeClass('nodisplay');
-
-  fetchFoods();
-  fetchFoodParts();
-}
-
-/**
- * Read the food list from the config file and populate the UI.
- */
-function fetchFoods() {
-  var $foodsNode = $(".foods");
-
-  // Clear old list and start fresh
-  $foodsNode.empty();
-  $foodsNode.append("<option value=\"0\">Chagua Chakula</option>");
-
-  // Check for recent foods in the cookies
-  var recentFoods = getRecentFoods();
-  for (var i = 0; i < recentFoods.length; i++) {
-    var food = recentFoods[i];
-    $foodsNode.append("<option value=\"" + food + "\"><a id=\"" + food +
-                      "\" class=\"food food-show\" href=\"#\">" + food + "</option>");
-  }
-
-  // Retrieve the full list from the text file
-  var foodData = $.ajax({type: "GET", url: "config/foodList.txt", async:false}).responseText;
-  var foodItems = foodData.split("\n");
-  for (var i = 0; i < foodItems.length; i++) {
-    if (foodItems[i]) {
-      var foodValue = foodItems[i].trim().toLowerCase().replace(" ", "_");
-      $foodsNode.append("<option value=\"" + foodValue + "\"><a id=\"" + foodValue +
-                        "\" class=\"food food-show\" href=\"#\">" + foodItems[i] + "</option>");
-    }
-  }
-}
-
-/**
- * Read the food part list from the config file and populate the UI.
- */
-function fetchFoodParts() {
-  var $foodPartNode = $(".food-part");
-
-  var foodPartData = $.ajax({type: "GET", url: "config/foodPartList.txt", async:false}).responseText;
-  var foodParts = foodPartData.split("\n");
-  for (var i = 0; i < foodParts.length; i++) {
-    if (foodParts[i]) {
-      var foodPartValue = foodParts[i].trim().toLowerCase().replace(" ", "_");
-      $foodPartNode.append("<option value=\"" + foodPartValue + "\"><a id=\"" + foodPartValue +
-                          "\" class=\"foodPart foodPart-show\" href=\"#\">" + foodParts[i] + "</option>");
-    }
-  }
-}
-
-/**
- * Stores a food at the top of the most recent foods list in the cookie
- */
-function addToRecentFoods(newFood) {
-  var foodList, foodCookie, index;
-  foodList = getRecentFoods();
-
-  // If the food is already in the list, remove it to prevent a duplicate
-  index = foodList.indexOf(newFood);
-  if (index >= 0) {
-    foodList.splice(index, 1);
-  }
-
-  // Prepend the food to the front of the list
-  foodList.unshift(newFood);
-
-  if (foodList.length > RECENT_FOODS_MAX) {
-    foodList.splice(RECENT_FOODS_MAX, foodList.length);
-  }
-
-  // Repackage as a string
-  foodCookie = foodList.join(',');
-  docCookies.setItem(FOOD_LIST_COOKIE, foodCookie, Infinity);
-}
-
-/**
- * Retrieves the recent food list cookie contents
- */
-function getRecentFoods() {
-  var foodList;
-  if (docCookies.hasItem(FOOD_LIST_COOKIE)) {
-    foodList = docCookies.getItem(FOOD_LIST_COOKIE);
-    foodList = foodList.split(",");
-  } else {
-    foodList = [];
-  }
-
-  return foodList;
-}
-
-/**
- * Show the species editing div, hiding the food and chimps.
- */
-function showSpecies() {
-  $('.container').addClass('nodisplay');
-  $('.food-container').addClass('nodisplay');
-  $('.species-container').removeClass('nodisplay');
-}
-
-
-/**
- * Show the chimps, hiding the species and food.
- */
-function showChimps() {
-  $('.food-container').addClass('nodisplay');
-  $('.species-container').addClass('nodisplay');
-  $('.container').removeClass('nodisplay');
-}
-
-
-/**
- * Clear the UI of food and species editing of whatever had previous been
- * selected. That way we won't populate with old state when a new item is set
- * to be entered.
- */
-function clearSpeciesAndFoodSelected() {
-  $('.food-select option').prop('selected', false);
-  $('.species-select option').prop('selected', false);
-
-  $('.food-spec-select').val('0');
-  $('.species-spec-select').val('0');
-
-  $('.food-summary').text('?');
-  $('.species-summary').text('?');
-
-  $('#food-summary').attr('__rowid', '');
-  $('#species-summary').attr('__rowid', '');
-
-  $('.food-summary').removeAttr('__data');
-  $('.species-summary').removeAttr('__data');
-
-  $('.food-negative-message').addClass('nodisplay');
-  $('.species-negative-message').addClass('nodisplay');
-
-  exports.updateSaveFoodButton();
-  exports.updateSaveSpeciesButton();
-}
-
-
-function timeIsValid(time) {
-  // hh:mm is the default input. Faking begins with and ends with here.
-  return (
-    time &&
-    time !==
-    FLAG_PLACE_HOLDER_TIME && time !== ''
-  );
-}
-
-
-function foodIsNegativeDuration(food) {
-  if (timeIsValid(food.startTime)) {
-    if (food.endTime !== util.flagEndTimeNotSet && timeIsValid(food.endTime)) {
-      if (util.isNegativeDuration(food.startTime, food.endTime)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-function speciesIsNegativeDuration(species) {
-  if (timeIsValid(species.startTime)) {
-    if (
-        species.endTime !== util.flagEndTimeNotSet &&
-        timeIsValid(species.endTime))
-    {
-      if (util.isNegativeDuration(species.startTime, species.endTime)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-
-/**
- * True if the food can be persisted. This means all is valid except rowId and
- * end time.
- */
-function foodCanBePersisted(food) {
-  if (foodIsNegativeDuration(food)) {
-    return false;
-  }
-  return (
-      timeIsValid(food.startTime) &&
-      food.foodName &&
-      food.foodName !== '' &&
-      food.foodPartEaten &&
-      food.foodPartEaten !== ''
-  );
-}
-
-
-/**
- * True if the species can be persisted. This means all is valid except rowId
- * and end time.
- */
-function speciesCanBePersisted(species) {
-  if (speciesIsNegativeDuration(species)) {
-    return false;
-  }
-  return (
-      timeIsValid(species.startTime) &&
-      species.speciesName &&
-      species.number &&
-      species.number !== 0 &&
-      species.number !== '0'
-  );
-}
-
-
-/**
- * True if a valid food can be selected from the UI (i.e. if it can be saved).
- */
-function validFoodSelected() {
-  // A valid food means food and part selected, begin hh and mm selected. Not
-  // necessarily an end time selected.
-  var food = exports.getFoodFromUi();
-  return foodCanBePersisted(food);
-}
-
-
-/**
- * True if a valid food can be selected from the UI (i.e. if it can be saved).
- */
-function validSpeciesSelected() {
-  // A valid food means food and part selected, begin hh and mm selected. Not
-  // necessarily an end time selected.
-  var species = exports.getSpeciesFromUi();
-  return speciesCanBePersisted(species);
-}
-
-
-/**
- * Add the Species in the species array to a select list as options.
- */
-exports.addSpeciesToList = function(speciesArr, $list) {
-  speciesArr.forEach(function(species) {
-    var option = $('<option></option>');
-    option.attr('value', species.speciesName);
-    option.addClass('dynamic');
-    option.text(
-      getSpeciesNumberUserLabel(species.number) +
-      ' ' +
-      species.speciesName
-    );
-
-    option.attr('__rowid', species.rowId);
-    option.attr('__date', species.date);
-    option.attr('__focalId', species.focalChimpId);
-    option.attr('__startTime', species.startTime);
-    option.attr('__endTime', species.endTime);
-    option.attr('__number', species.number);
-    option.attr('__name', species.speciesName);
-
-    $list.append(option);
-  });
+exports.timeLabels = {
+  absent: '0',
+  continuing: '1',
+  arriveFirst: '5',
+  arriveSecond: '10',
+  arriveThird: '15',
+  departFirst: '-5',
+  departSecond: '-10',
+  departThird: '-15'
 };
 
 
 /**
- * Add the Food in the food array to a select list as options.
- */
-exports.addFoodToList = function(foodArr, $list) {
-  foodArr.forEach(function(food) {
-    var option = $('<option></option>');
-    option.attr('value', food.foodName);
-    option.addClass('dynamic');
-    option.text(food.foodName + ' ' + food.foodPartEaten);
-
-    option.attr('__rowid', food.rowId);
-    option.attr('__date', food.date);
-    option.attr('__focalId', food.focalChimpId);
-    option.attr('__startTime', food.startTime);
-    option.attr('__endTime', food.endTime);
-    option.attr('__name', food.foodName);
-    option.attr('__part', food.foodPartEaten);
-
-    $list.append(option);
-  });
-
-};
-
-
-exports.refreshSpeciesList = function(control) {
-  // remove the existing dynamic items from both lists.
-  $('.species-spec-select .dynamic').remove();
-  
-  var date = urls.getFollowDateFromUrl();
-  var focalId = urls.getFocalChimpIdFromUrl();
-  var speciesTableData = db.getSpeciesDataForDate(control, date, focalId);
-  
-  var allSpecies = db.convertTableDataToSpecies(speciesTableData);
-
-  var activeSpecies = [];
-  var completedSpecies = [];
-
-  allSpecies.forEach(function(species) {
-    if (species.endTime === util.flagEndTimeNotSet) {
-      activeSpecies.push(species);
-    } else {
-      completedSpecies.push(species);
-    }
-  });
-
-  var $activeList = $('#active-species');
-  var $completedList = $('#finished-species');
-
-  if (activeSpecies.length === 0) {
-    $activeList.removeClass('ongoing-list');
-  } else {
-    $activeList.addClass('ongoing-list');
-  }
-
-  exports.addSpeciesToList(activeSpecies, $activeList);
-  exports.addSpeciesToList(completedSpecies, $completedList);
-};
-
-
-exports.refreshFoodList = function(control) {
-  // remove the existing dynamic items from both lists.
-  $('.food-spec-select .dynamic').remove();
-  
-  var date = urls.getFollowDateFromUrl();
-  var focalId = urls.getFocalChimpIdFromUrl();
-  var foodTableData = db.getFoodDataForDate(control, date, focalId);
-  
-  var allFood = db.convertTableDataToFood(foodTableData);
-
-  var activeFood = [];
-  var completedFood = [];
-
-  allFood.forEach(function(food) {
-    if (food.endTime === util.flagEndTimeNotSet) {
-      activeFood.push(food);
-    } else {
-      completedFood.push(food);
-    }
-  });
-
-  var $activeList = $('#active-food');
-  var $completedList = $('#finished-food');
-
-  if (activeFood.length === 0) {
-    $activeList.removeClass('ongoing-list');
-  } else {
-    $activeList.addClass('ongoing-list');
-  }
-
-  exports.addFoodToList(activeFood, $activeList);
-  exports.addFoodToList(completedFood, $completedList);
-};
-
-
-exports.editExistingFood = function(food) {
-  var $sumStartTime = $('#food-summary-start-time');
-  var $sumEndTime = $('#food-summary-end-time');
-  var $sumName = $('#food-summary-food');
-  var $sumPart = $('#food-summary-part');
-  var $foodSummary = $('#food-summary');
-
-  var $editName = $('#foods');
-  var $editPart = $('#food-part');
-
-  var userStartTime = util.getUserTimeFromDbTime(food.startTime);
-  $sumStartTime.attr('__data', food.startTime);
-  $sumStartTime.text(userStartTime);
-
-  if (food.endTime !== util.flagEndTimeNotSet) {
-    var userEndTime = util.getUserTimeFromDbTime(food.endTime);
-    $sumEndTime.attr('__data', food.endTime);
-    $sumEndTime.text(userEndTime);
-  }
-
-  $sumName.text(food.foodName);
-  $sumName.attr('__data',food.foodName);
-  $editName.val(food.foodName);
-
-  $sumPart.text(food.foodPartEaten);
-  $sumPart.attr('__data',food.foodPartEaten);
-  $editPart.val(food.foodPartEaten);
-
-  $foodSummary.attr('__rowid', food.rowId);
-
-  exports.updateSaveFoodButton();
-
-  showFood();
-};
-
-
-exports.editExistingSpecies = function(species) {
-  var $sumStartTime = $('#species-summary-start-time');
-  var $sumEndTime = $('#species-summary-end-time');
-  var $sumName = $('#species-summary-name');
-  var $sumNumber = $('#species-summary-number');
-  var $speciesSummary = $('#species-summary');
-
-  var $editName = $('#species');
-  var $editPart = $('#species_number');
-
-  var userStartTime = util.getUserTimeFromDbTime(species.startTime);
-  $sumStartTime.attr('__data', species.startTime);
-  $sumStartTime.text(userStartTime);
-
-  if (species.endTime !== util.flagEndTimeNotSet) {
-    var userEndTime = util.getUserTimeFromDbTime(species.endTime);
-    $sumEndTime.attr('__data', species.endTime);
-    $sumEndTime.text(userEndTime);
-  }
-
-  $sumName.text(species.speciesName);
-  $sumName.attr('__data', species.speciesName);
-  $editName.val(species.speciesName);
-
-  $sumNumber.text(getSpeciesNumberUserLabel(species.number));
-  $sumNumber.attr('__data', species.number);
-  $editPart.val(species.number);
-
-  $speciesSummary.attr('__rowid', species.rowId);
-
-  showSpecies();
-};
-
-
-exports.updateNegativeFoodDurationMessage = function() {
-  var food = exports.getFoodFromUi();
-  var $foodMsg = $('#food-negative-message');
-
-  if (foodIsNegativeDuration(food)) {
-    $foodMsg.removeClass('nodisplay');
-  } else {
-    $foodMsg.addClass('nodisplay');
-  }
-};
-
-
-exports.updateNegativeSpeciesDurationMessage = function() {
-  var species = exports.getSpeciesFromUi();
-  var $speciesMsg = $('#species-negative-message');
-
-  if (speciesIsNegativeDuration(species)) {
-    $speciesMsg.removeClass('nodisplay');
-  } else {
-    $speciesMsg.addClass('nodisplay');
-  }
-};
-
-
-/**
- * Enable or disable the food save button as appropriate.
- */
-exports.updateSaveFoodButton = function() {
-  var $saveFood = $('#saving_food');
-
-  if (validFoodSelected()) {
-    $saveFood.prop('disabled', false);
-  } else {
-    $saveFood.prop('disabled', true);
-  }
-};
-
-
-/**
- * Update the UI after an edit to a species has taken place.
- */
-exports.updateSaveSpeciesButton = function() {
-  var $saveSpecies = $('#saving_species');
-
-  if (validSpeciesSelected()) {
-    $saveSpecies.prop('disabled', false);
-  } else {
-    $saveSpecies.prop('disabled', true);
-  }
-};
-
-
-/**
- * Labels that are used to indicate at what point in a 15 minute interval a
- * chimp arrived.
- */
-var timeLabels = db.timeLabels;
-
-/**
- * The labels we use to indicate certainty of an observation. These are the
- * labels we use internally, not the ones shown to the user.
- */
-var certaintyLabels = db.certaintyLabels;
-
-/**
- * The labels for certainty that are shown to a user.
- */
-var certaintyLabelsUser = {
-  certain: '✓',
-  uncertain: '•',
-  nestCertain: 'N✓',
-  nestUncertain: 'N•'
-};
-
-
-/**
- * The labels we use internally for whether or not a chimp is within 5 meters.
- */
-var withinFiveLabels = {
-  no: '0',
-  yes: '1'
-};
-
-
-/**
- * The labels we show users if for whether or not a chimp is within 5 meters.
- */
-var withinFiveLabelsUser = {
-  no: 'X',
-  yes: '✓'
-};
-
-
-/**
- * The labels we use internally for whether or a chimp's estrus state.
- */
-var estrusLabels = {
-  a: '0',
-  b: '25',
-  c: '50',
-  d: '75',
-  e: '100'
-};
-
-
-/**
- * The labels we display to the user for a chimp's estrus state.
- */
-var estrusLabelsUser = {
-  a: '.00',
-  b: '.25',
-  c: '.50',
-  d: '.75',
-  e: '1.0'
-};
-
-
-/**
- * The labels we use internally to keep track if something is closest to focal.
- */
-var closestLabels = {
-  no: '0',
-  yes: '1'
-};
-
-
-/**
- * The labels we display to the user for whether or not a chimp is closest to
- * focal.
- */
-var closestLabelsUser = {
-  no: 'N',
-  yes: 'Y'
-};
-
-
-exports.updateUiForChimp = function(chimp) {
-  assertIsChimp(chimp);
-
-  // We're putting the rowId on each of the chimps.
-  var $chimp = $('#' + chimp.chimpId);
-  $chimp.attr('rowId', chimp.rowId);
-
-  exports.updateIconForChimp(chimp);
-  exports.updateCertaintyUiForChimp(chimp);
-  exports.updateWithinFiveUiForChimp(chimp);
-  exports.updateEstrusUiForChimp(chimp);
-  exports.updateClosestUiForChimp(chimp);
-
-  // And now make visible as necessary.
-  exports.updateVisiblityForChimp(chimp);
-
-};
-
-
-/**
- * Update the icon for arrival and departure for the given chimp.
- */
-exports.updateIconForChimp = function(chimp) {
-  assertIsChimp(chimp);
-
-  var imagePaths = {
-    absent: './img/time_empty.png',
-    continuing: './img/time_continues.png',
-    arriveFirst: './img/time_arriveFirst.png',
-    arriveSecond: './img/time_arriveSecond.png',
-    arriveThird: './img/time_arriveThird.png',
-    departFirst: './img/time_departFirst.png',
-    departSecond: './img/time_departSecond.png',
-    departThird: './img/time_departThird.png'
-  };
-
-  // Store the arrival/departure time in the UI.
-  // For now we're storing it in the td that holds the image.
-  var timeId = getIdForTime(chimp);
-  var $time = $('#' + timeId);
-  $time.attr('__data', chimp.time);
-
-  // And now update the image.
-  var id = getIdForTimeImage(chimp);
-  var $img = $('#' + id);
-  var path = imagePaths.absent;
-
-  switch (chimp.time) {
-    case timeLabels.absent:
-      path = imagePaths.absent;
-      break;
-    case timeLabels.continuing:
-      path = imagePaths.continuing;
-      break;
-    case timeLabels.arriveFirst:
-      path = imagePaths.arriveFirst;
-      break;
-    case timeLabels.arriveSecond:
-      path = imagePaths.arriveSecond;
-      break;
-    case timeLabels.arriveThird:
-      path = imagePaths.arriveThird;
-      break;
-    case timeLabels.departFirst:
-      path = imagePaths.departFirst;
-      break;
-    case timeLabels.departSecond:
-      path = imagePaths.departSecond;
-      break;
-    case timeLabels.departThird:
-      path = imagePaths.departThird;
-      break;
-    default:
-      console.log('unrecognized time label: ' + chimp.time);
-  }
-
-  $img.prop('src', path);
-
-};
-
-
-/**
- * Update the UI for the certainty for a particular chimp.
- */
-exports.updateCertaintyUiForChimp = function(chimp) {
-  assertIsChimp(chimp);
-
-  // Store the value in the UI.
-  // For now we're storing it in the td. Note that we COULD get this stuff by
-  // going backwards from the user-facing label. This would be reasonable, but
-  // this feels cleaner and better separates UI from behavior, imo.
-  var id = getIdForCertainty(chimp);
-  var $certainty = $('#' + id);
-  $certainty.attr('__data', chimp.certainty);
-
-  // And now update the user facing label.
-  switch (chimp.certainty) {
-    case certaintyLabels.certain:
-      $certainty.text(certaintyLabelsUser.certain);
-      break;
-    case certaintyLabels.uncertain:
-      $certainty.text(certaintyLabelsUser.uncertain);
-      break;
-    case certaintyLabels.nestCertain:
-      $certainty.text(certaintyLabelsUser.nestCertain);
-      break;
-    case certaintyLabels.nestUncertain:
-      $certainty.text(certaintyLabelsUser.nestUncertain);
-      break;
-    default:
-      console.log('unrecognized chimp certainty: ' + chimp);
-  }
-
-};
-
-
-exports.updateWithinFiveUiForChimp = function(chimp) {
-  assertIsChimp(chimp);
-
-  var id = getIdForWithinFiveMeters(chimp);
-  var $withinFive = $('#' + id);
-  // And store the value in the ui.
-  $withinFive.attr('__data', chimp.withinFive);
-
-  switch (chimp.withinFive) {
-    case withinFiveLabels.yes:
-      $withinFive.text(withinFiveLabelsUser.yes);
-      break;
-    case withinFiveLabels.no:
-      $withinFive.text(withinFiveLabelsUser.no);
-      break;
-    default:
-      console.log('unrecognized within five meters: ' + chimp);
-  }
-
-};
-
-
-exports.updateEstrusUiForChimp = function(chimp) {
-  assertIsChimp(chimp);
-
-  var id = getIdForEstrus(chimp);
-  var $estrus = $('#' + id);
-  // Store the value in the UI.
-  $estrus.attr('__data', chimp.estrus);
-
-  switch (chimp.estrus) {
-    case estrusLabels.a:
-      $estrus.text(estrusLabelsUser.a);
-      break;
-    case estrusLabels.b:
-      $estrus.text(estrusLabelsUser.b);
-      break;
-    case estrusLabels.c:
-      $estrus.text(estrusLabelsUser.c);
-      break;
-    case estrusLabels.d:
-      $estrus.text(estrusLabelsUser.d);
-      break;
-    case estrusLabels.e:
-      $estrus.text(estrusLabelsUser.e);
-      break;
-    default:
-      console.log('unrecognized chimp estrus state: ' + chimp);
-  }
-
-};
-
-
-exports.updateClosestUiForChimp = function(chimp) {
-  assertIsChimp(chimp);
-
-  var id = getIdForClosest(chimp);
-  var $closest = $('#' + id);
-  // Store the value in the UI.
-  $closest.attr('__data', chimp.closest);
-
-  switch (chimp.closest) {
-    case closestLabels.no:
-      $closest.text(closestLabelsUser.no);
-      break;
-    case closestLabels.yes:
-      $closest.text(closestLabelsUser.yes);
-      break;
-    default:
-      console.log('unrecognized closest label: ' + chimp);
-  }
-
-};
-
-
-exports.updateUiForFollowTime = function() {
-
-  var followTime = urls.getFollowTimeFromUrl();
-
-  var followTimeUser;
-
-  if (!followTime || followTime === '') {
-    console.log('No follow time has been specified!');
-    followTimeUser = 'N/A';
-  } else {
-    followTimeUser = util.getUserTimeFromDbTime(followTime);
-  }
-
-  $('#time-label').text(followTimeUser);
-
-};
-
-exports.updateUiForCommunity = function() {
-
-  var community = urls.getCommunityFromUrl();
-  var $chimps = $("#table-container");
-
-  if (!community || community === '') {
-    console.log('No community has been specified!');
-    return;
-  }
-
-  initializeChimpTable($chimps);
-
-  var chimpListCSV = $.ajax({type: "GET", url: "config/chimpList.csv", async:false}).responseText;
-
-  // Fetch chimps in this community
-  Papa.parse(chimpListCSV, {
-    header: true,
-    complete: function(results) {
-      var chimpData = results["data"];
-      var femaleChimps = [];
-      var maleChimps = [];
-      var tableData = "";
-
-      // Collect all chimps and organize them into gender lists
-      for (var i = 0; i < chimpData.length; i++) {
-        var currChimp = chimpData[i]["Chimp"];
-        var currCommunity = chimpData[i]["Community"];
-        var currGender = chimpData[i]["Sex"];
-        if (currChimp && currCommunity === community) {
-          if (currGender === "F") {
-            femaleChimps.push(currChimp);
-          } else if (currGender === "M") {
-            maleChimps.push(currChimp);
-          }
-        }
-      }
-
-      $chimps.empty();
-      tableData = initializeChimpTable();
-
-      tableData += addGenderListToTable(femaleChimps, true);
-      tableData += addGenderListToTable(maleChimps, false);
-
-      tableData += "</table>";
-
-      $chimps.append(tableData);
-    },
-    error: function() {
-      alert("Error reading chimp list");
-    }
-  });
-
-};
-
-function addGenderListToTable(genderList, isFemale) {
-  var tableData = "";
-  var lastRowIndex = genderList.length - (genderList.length % 2 === 0 ? 2 : 1);
-
-  for (var i = 0; i < genderList.length; i++) {
-    var isLeftColumn = (i % 2 === 0);
-
-    // The last row in the female portion gets a css class to delineate the border
-    if (isFemale && (i === lastRowIndex)) {
-      tableData += "<tr class=\"male-female-divider\">";
-    } else if (isLeftColumn) {
-      tableData +="<tr>";
-    }
-
-    tableData += generateChimpTableData(genderList[i], isFemale);
-
-    // If there are an odd number of chimps, end the row with only one column
-    if (!isLeftColumn || (i === lastRowIndex && i % 2 !== 0)) {
-      tableData += "</tr>";
-    } else {
-      tableData += "<td></td>";
-    }
-
-  }
-
-  return tableData;
-}
-
-function initializeChimpTable() {
-  return ("<table id=\"observation-table\" style=\"font-size: 10.5px;\">" +
-          "<tr>" +
-          "<td></td>" +
-          "<td></td>" +
-          "<td>C</td>" +
-          "<td>U</td>" +
-          "<td>5m</td>" +
-          "<td>JK</td>" +
-          "<td style=\"padding-right: 1.3em;\"></td>" +
-          "<td></td>" +
-          "<td></td>" +
-          "<td>C</td>" +
-          "<td>U</td>" +
-          "<td>5m</td>" +
-          "<td>JK</td>" +
-          "</tr>");
-}
-
-function generateChimpTableData(chimp, isFemale) {
-  var chimpVal = chimp.trim().toLowerCase().replace(" ", "_");
-
-  return ("<td><button id=\"" + chimpVal + "\" class=\"" +
-          (isFemale ? "female" : "male") + "-chimp chimp\">" + chimp + "</button></td>" +
-          "<td class=\"time_point\" id=\"" + chimpVal + "_time\">" +
-          "<img src=\"./img/time_empty.png\" id=\"" + chimpVal + "_time_img\"/></td>" +
-          "<td><button class=\"certainty\" id=\"" + chimpVal + "_cer\">✓</button></td>" +
-          "<td><button class=\"sexual_state\" id=\"" + chimpVal + "_sexState\">U</button></td>" +
-          "<td><button class=\"5-meter\" id=\"" + chimpVal + "_five\">&#x2717;</button></td>" +
-          "<td><button class=\"closeness\" id=\"" + chimpVal + "_close\">&#x2717;</button></td>");
-}
-
-/**
- * Update the UI for the "previous" button.
- */
-exports.initializePreviousButton = function(control) {
-  // Hide the button if there is no previous instance. Otherwise, go back in
-  // time 15 minutes. We will determine if there is a previous instance by
-  // whether or not the current time is the start time of the follow.
-  var focalId = urls.getFocalChimpIdFromUrl();
-  var date = urls.getFollowDateFromUrl();
-  var currentTime = urls.getFollowTimeFromUrl();
-  var previousTime = util.decrementTime(currentTime);
-  var communityId = urls.getCommunityFromUrl();
-
-  var $prevButton = $('#previous-button');
-
-  var arrThisFollow = db.getFollowForDateAndChimp(control, date, focalId);
-  if (arrThisFollow.length === 0) {
-    // No follow for this day. Trouble!!!
-    console.log('no follow found for this day! this is a bug.');
-    $prevButton.addClass('nodisplay');
-    return;
-  }
-  var thisFollow = arrThisFollow[0];
-
-  if (thisFollow.beginTime === currentTime) {
-    // We're at the first interval.
-    $prevButton.addClass('nodisplay');
-    return;
-  }
-
-  // Otherwise we have a valid previous time.
-  $prevButton.click(function() {
-    exports.showLoadingScreen(true);
-
-    // Prepare the url we're going to use for the next timepoint.
-    var queryString = urls.createParamsForFollow(
-      date,
-      previousTime,
-      focalId,
-      communityId
-    );
-    var url = control.getFileAsUrl('assets/followScreen.html' + queryString);
-
-    // Navigate to that url to move to the next timepoint.
-    window.location.href = url;
-  });
-
-};
-
-
-exports.updateUiForFocalId = function() {
-  var focalId = urls.getFocalChimpIdFromUrl();
-  var $focalButton = $('#' + focalId);
-  $focalButton.addClass('focal-chimp');
-};
-
-
-exports.updateUiForEndOfInterval = function() {
-  // update the UI to show time has expired
-  var $nextButton = $('#next-button');
-  $nextButton.removeClass('btn-primary');
-  $nextButton.addClass('btn-danger');
-  $nextButton.text('Time Up!');
-};
-
-/**
- * update the icon for selected chimp
- */
-exports.updateIconForSelectedChimp = function(chimp, chimpid) {
-  var imagePaths = {
-    absent: './img/time_empty.png',
-    continuing: './img/time_continues.png',
-    arriveFirst: './img/time_arriveFirst.png',
-    arriveSecond: './img/time_arriveSecond.png',
-    arriveThird: './img/time_arriveThird.png',
-    departFirst: './img/time_departFirst.png',
-    departSecond: './img/time_departSecond.png',
-    departThird: './img/time_departThird.png'
-  };
-  var imageId = chimpid + '_img';
-  //var $img = $('#' + imageId);
-  //imageId.setAttribute("id", timeid);
-
-  switch (chimp.time) {
-    case timeLabels.absent:
-      document.getElementById(imageId).src = imagePaths.absent;
-      //$img.src = imagePaths.absent;
-      break;
-    case timeLabels.continuing:
-      document.getElementById(imageId).src = imagePaths.continuing;
-      //$img.src = imagePaths.continuing;
-      break;
-    case timeLabels.arriveFirst:
-      document.getElementById(imageId).src = imagePaths.arriveFirst;
-      //$img.src = imagePaths.arriveFirst;
-      break;
-    case timeLabels.arriveSecond:
-      document.getElementById(imageId).src = imagePaths.arriveSecond;
-      //$img.src = imagePaths.arriveSecond;
-      break;
-    case timeLabels.arriveThird:
-      document.getElementById(imageId).src = imagePaths.arriveThird;
-      //$img.src = imagePaths.arriveThird;
-      break;
-    case timeLabels.departFirst:
-      document.getElementById(imageId).src = imagePaths.departFirst;
-      //$img.src = imagePaths.departFirst;
-      break;
-    case timeLabels.departSecond:
-      document.getElementById(imageId).src = imagePaths.departSecond;
-      //$img.src = imagePaths.departSecond;
-      break;
-    case timeLabels.departThird:
-      document.getElementById(imageId).src = imagePaths.departThird;
-      //$img.src = imagePaths.departThird;
-      break;
-    default:
-      console.log('unrecognized time label: ' + chimp.time);
-  }
-};
-/**
- * Add the listeners for the items that update a chimp's records.
- */
-exports.initializeEditListeners = function(control) {
- 
-  // The .time objects are the things we click to demonstrate when a chimp
-  // arrives or leaves. This might be the image icons, for instance.
-  $('.time').on('click', function() {
-    var valueFromUi = $(this).prop('id');
-    var valueForDb;
-    switch (valueFromUi) {
-      case timeLabels.absent:
-        valueForDb = timeLabels.absent;
-        break;
-      case timeLabels.continuing:
-        valueForDb = timeLabels.continuing;
-        break;
-      case timeLabels.arriveFirst:
-        valueForDb = timeLabels.arriveFirst;
-        break;
-      case timeLabels.arriveSecond:
-        valueForDb = timeLabels.arriveSecond;
-        break;
-      case timeLabels.arriveThird:
-        valueForDb = timeLabels.arriveThird;
-        break;
-      case timeLabels.departFirst:
-        valueForDb = timeLabels.departFirst;
-        break;
-      case timeLabels.departSecond:
-        valueForDb = timeLabels.departSecond;
-        break;
-      case timeLabels.departThird:
-        valueForDb = timeLabels.departThird;
-        break;
-      default:
-        console.log('unrecognized time from ui: ' + valueFromUi);
-        window.alert('unrecognized time from ui: ' + valueFromUi);
-    }
-
-    var chimp = exports.getSelectedChimp();
-    var chimpid = getIdForTime(chimp);
-    assertFoundChimp(chimp);
-    chimp.time = valueForDb;
-    exports.updateUiForChimp(chimp);
-    db.writeRowForChimp(control, chimp, true);
-
-    exports.showTimeIndicatorsToEdit(false, chimp);  // added chimp
-    exports.updateIconForSelectedChimp(chimp, chimpid, valueFromUi);
-  });
-
-  // Certainty
-  $('input[name=certain]:radio').on('change', function() {
-    var value = $(this).val();
-
-    var valueForDb;
-    switch (value) {
-      case certaintyLabels.certain:
-        valueForDb = certaintyLabels.certain;
-        break;
-      case certaintyLabels.uncertain:
-        valueForDb = certaintyLabels.uncertain;
-        break;
-      case certaintyLabels.nestCertain:
-        valueForDb = certaintyLabels.nestCertain;
-        break;
-      case certaintyLabels.nestUncertain:
-        valueForDb = certaintyLabels.nestUncertain;
-        break;
-      default:
-        console.log('unrecognized chimp certainty value from ui: ' + value);
-        window.alert('unrecognized chimp certainty value from ui: ' + value);
-        return;
-    }
-
-    var chimp = exports.getSelectedChimp();
-    assertFoundChimp(chimp);
-    chimp.certainty = valueForDb;
-
-    exports.updateUiForChimp(chimp);
-    db.writeRowForChimp(control, chimp, true);
-
-    exports.showCertaintyToEdit(false);
-  });
-
-  $('input[name=certain]:radio').click(function() {
-    var chimp = exports.getSelectedChimp();
-    if (chimp.certainty === $(this).val()) {
-      // then we've reselected the same value. hide the buttons
-      exports.showCertaintyToEdit(false);
-    }
-  });
-
-  // Within five meters
-  $('input[name=distance]:radio').on('change', function() {
-    var valueFromUi = $(this).val();
-
-    var valueForDb;
-    switch (valueFromUi) {
-      case withinFiveLabels.no:
-        valueForDb = withinFiveLabels.no;
-        break;
-      case withinFiveLabels.yes:
-        valueForDb = withinFiveLabels.yes;
-        break;
-      default:
-        console.log('unrecognized within five value from ui: ' + valueFromUi);
-        window.alert('unrecognized within five value from ui: ' + valueFromUi);
-        return;
-    }
-  
-    var chimp = exports.getSelectedChimp();
-    assertFoundChimp(chimp);
-    chimp.withinFive = valueForDb;
-
-    exports.updateUiForChimp(chimp);
-    db.writeRowForChimp(control, chimp, true);
-
-    exports.showWithinFiveToEdit(false);
-  });
-
-  $('input[name=distance]:radio').click(function() {
-    var chimp = exports.getSelectedChimp();
-    if (chimp.withinFive === $(this).val()) {
-      // then we've reselected the same value. hide the buttons
-      exports.showWithinFiveToEdit(false);
-    }
-  });
-
-  // Estrus
-  $('input[name=sex_state]:radio').on('change', function() {
-    var valueFromUi = $(this).val();
-
-    var valueForDb;
-    switch (valueFromUi) {
-      case estrusLabels.a:
-        valueForDb = estrusLabels.a;
-        break;
-      case estrusLabels.b:
-        valueForDb = estrusLabels.b;
-        break;
-      case estrusLabels.c:
-        valueForDb = estrusLabels.c;
-        break;
-      case estrusLabels.d:
-        valueForDb = estrusLabels.d;
-        break;
-      case estrusLabels.e:
-        valueForDb = estrusLabels.e;
-        break;
-      default:
-        console.log('unrecognized estrus value from ui: ' + valueFromUi);
-        window.alert('unrecognized estrus value from ui: ' + valueFromUi);
-    }
-
-    var chimp = exports.getSelectedChimp();
-    assertFoundChimp(chimp);
-    chimp.estrus = valueForDb;
-
-    exports.updateUiForChimp(chimp);
-    db.writeRowForChimp(control, chimp, true);
-
-    exports.showEstrusToEdit(false);
-  });
-
-  $('input[name=sex_state]:radio').click(function() {
-    var chimp = exports.getSelectedChimp();
-    if (chimp.estrus === $(this).val()) {
-      // then we've reselected the same value. hide the buttons
-      exports.showEstrusToEdit(false);
-    }
-  });
-
-  // Closest to focal
-  $('input[name=close]:radio').on('change', function() {
-    var valueFromUi = $(this).val();
-
-    var valueForDb;
-    switch (valueFromUi) {
-      case closestLabels.no:
-        valueForDb = closestLabels.no;
-        break;
-      case closestLabels.yes:
-        valueForDb = closestLabels.yes;
-        break;
-      default:
-        console.log('unrecognized closest value from ui: ' + valueFromUi);
-        window.alert('unrecognized closest value from ui: ' + valueFromUi);
-    }
-
-    // Then handle the existing chimp.
-    var chimp = exports.getSelectedChimp();
-    assertFoundChimp(chimp);
-    chimp.closest = valueForDb;
-    
-    exports.updateUiForChimp(chimp);
-    db.writeRowForChimp(control, chimp, true);
-
-    exports.showClosestToEdit(false);
-  });
-
-  $('input[name=close]:radio').click(function() {
-    var chimp = exports.getSelectedChimp();
-    if (chimp.closest === $(this).val()) {
-      // then we've reselected the same value. hide the buttons
-      exports.showClosestToEdit(false);
-    }
-  });
-
-
-};
-
-
-exports.initializeFoodListeners = function(control) {
-
-  $('#start-time-food').change(function() {
-    var $foodSummaryStart = $('#food-summary-start-time');
-    var $foodEditStart = $('#start-time-food');
-    var foodEditStartDb = $foodEditStart.val();
-
-    if (timeIsValid(foodEditStartDb)) {
-      var userStartTime = util.getUserTimeFromDbTime(foodEditStartDb);
-      $foodSummaryStart.text(userStartTime);
-      $foodSummaryStart.attr('__data', foodEditStartDb);
-    } else {
-      $foodSummaryStart.text('?');
-      $foodSummaryStart.removeAttr('__data');
-    }
-    exports.updateNegativeFoodDurationMessage();
-    exports.updateSaveFoodButton();
-  });
-
-  $('#end-time-food').change(function() {
-    var $foodSummaryEnd = $('#food-summary-end-time');
-    var $foodEditEnd = $('#end-time-food');
-    var foodEditEndDb = $foodEditEnd.val();
-
-    if (timeIsValid(foodEditEndDb)) {
-      var userEndtime = util.getUserTimeFromDbTime(foodEditEndDb);
-      $foodSummaryEnd.text(userEndtime);
-      $foodSummaryEnd.attr('__data', foodEditEndDb);
-    } else {
-      $foodSummaryEnd.text('?');
-      $foodSummaryEnd.removeAttr('__data');
-    }
-    exports.updateNegativeFoodDurationMessage();
-    exports.updateSaveFoodButton();
-  });
-
-  $('#foods').change(function() {
-    var $foodSummaryFood = $('#food-summary-food');
-    var $foodEditName = $('#foods');
-    var foodEditName = $foodEditName.val();
-
-    if (foodEditName !== '0') {
-      $foodSummaryFood.text(foodEditName);
-      $foodSummaryFood.attr('__data', foodEditName);
-    } else {
-      $foodSummaryFood.text('?');
-      $foodSummaryFood.removeAttr('__data');
-    }
-    exports.updateSaveFoodButton();
-  });
-
-  $('#food-part').change(function() {
-    var $foodSummaryPart = $('#food-summary-part');
-    var $foodEditPart = $('#food-part');
-    var foodEditPart = $foodEditPart.val();
-
-    if (foodEditPart !== '0') {
-      $foodSummaryPart.text(foodEditPart);
-      $foodSummaryPart.attr('__data', foodEditPart);
-    } else {
-      $foodSummaryPart.text('?');
-      $foodSummaryPart.removeAttr('__data');
-    }
-    exports.updateSaveFoodButton();
-  });
-
-  $('#saving_food').click(function() {
-    console.log('save food');
-    var activeFood = exports.getFoodFromUi();
-    // We can save something if it doesn't have a valid end time, but we want
-    // to flag it as invalid.
-    if (!timeIsValid(activeFood.endTime)) {
-      activeFood.endTime = util.flagEndTimeNotSet;
-    }
-
-    if (activeFood.rowId) {
-      // update
-      db.writeRowForFood(control, activeFood, true);
-    } else {
-      // add
-      db.writeRowForFood(control, activeFood, false);
-    }
-
-    addToRecentFoods(activeFood.foodName);
-
-    exports.refreshFoodList(control);
-    showChimps();
-    clearSpeciesAndFoodSelected();
-  });
-
-  $('.food-spec-select').change(function() {
-    var $option = $('option:selected', this);
-    var food = new models.Food(
-      $option.attr('__rowid'),
-      $option.attr('__date'),
-      $option.attr('__focalId'),
-      $option.attr('__startTime'),
-      $option.attr('__endTime'),
-      $option.attr('__name'),
-      $option.attr('__part')
-    );
-    exports.editExistingFood(food);
-  });
-};
-
-
-exports.initializeSpeciesListeners = function(control) {
-  $('#start-time-species').change(function() {
-    var $speciesSummaryStart = $('#species-summary-start-time');
-    var $speciesEditStart = $('#start-time-species');
-    var speciesEditStartDb = $speciesEditStart.val();
-
-    if (timeIsValid(speciesEditStartDb)) {
-      var userStartTime = util.getUserTimeFromDbTime(speciesEditStartDb);
-      $speciesSummaryStart.text(userStartTime);
-      $speciesSummaryStart.attr('__data', speciesEditStartDb);
-    } else {
-      $speciesSummaryStart.text('?');
-      $speciesSummaryStart.removeAttr('__data');
-    }
-    exports.updateNegativeSpeciesDurationMessage();
-    exports.updateSaveSpeciesButton();
-  });
-
-  $('#end-time-species').change(function() {
-    var $speciesSummaryEnd = $('#species-summary-end-time');
-    var $speciesEditEnd = $('#end-time-species');
-    var speciesEditEndDb = $speciesEditEnd.val();
-
-    if (timeIsValid(speciesEditEndDb)) {
-      var userTime = util.getUserTimeFromDbTime(speciesEditEndDb);
-      $speciesSummaryEnd.text(userTime);
-      $speciesSummaryEnd.attr('__data', speciesEditEndDb);
-    } else {
-      $speciesSummaryEnd.text('?');
-      $speciesSummaryEnd.removeAttr('__data');
-    }
-    exports.updateNegativeSpeciesDurationMessage();
-    exports.updateSaveSpeciesButton();
-  });
-
-  $('#species').change(function() {
-    var $speciesSummaryName = $('#species-summary-name');
-    var $speciesEditName = $('#species');
-    var speciesName = $speciesEditName.val();
-
-    if (speciesName !== '0') {
-      $speciesSummaryName.text(speciesName);
-      $speciesSummaryName.attr('__data', speciesName);
-    } else {
-      $speciesSummaryName.text('?');
-      $speciesSummaryName.removeAttr('__data');
-    }
-    exports.updateSaveSpeciesButton();
-  });
-
-  $('#species_number').change(function() {
-    var $speciesSummaryNumber = $('#species-summary-number');
-    var $speciesEditNumber = $('#species_number');
-    var speciesNumber = $speciesEditNumber.val();
-
-    if (speciesNumber !== '0') {
-      // 0 is the default, illegal, unselectable value
-      $speciesSummaryNumber.text(getSpeciesNumberUserLabel(speciesNumber));
-      $speciesSummaryNumber.attr('__data', speciesNumber);
-    } else {
-      $speciesSummaryNumber.text('?');
-      $speciesSummaryNumber.removeAttr('__data');
-    }
-    exports.updateSaveSpeciesButton();
-  });
-
-  $('#saving_species').click(function() {
-    console.log('save species');
-    var activeSpecies = exports.getSpeciesFromUi();
-    // We can save something if it doesn't have a valid end time, but we want
-    // to flag it as invalid.
-    if (!timeIsValid(activeSpecies.endTime)) {
-      activeSpecies.endTime = util.flagEndTimeNotSet;
-    }
-
-    if (activeSpecies.rowId) {
-      // update
-      db.writeRowForSpecies(control, activeSpecies, true);
-    } else {
-      // add
-      db.writeRowForSpecies(control, activeSpecies, false);
-    }
-
-    showChimps();
-    clearSpeciesAndFoodSelected();
-    exports.refreshSpeciesList(control);
-  });
-
-  $('.species-spec-select').change(function() {
-    var $option = $('option:selected', this);
-    var species = new models.Species(
-      $option.attr('__rowid'),
-      $option.attr('__date'),
-      $option.attr('__focalId'),
-      $option.attr('__startTime'),
-      $option.attr('__endTime'),
-      $option.attr('__name'),
-      $option.attr('__number')
-    );
-    exports.editExistingSpecies(species);
-  });
-};
-
-
-/**
- * Add the listeners to the elements relating to each chimp.
- */
-exports.initializeChimpListeners = function() {
-
-  $('.certainty').on('click', function() {
-    // Mark this chimp as selected.
-    var chimp = exports.getChimpFromElement($(this));
-    exports.showChimpIsSelected(chimp);
-    // Make the certainty editable.
-    exports.showCertaintyToEdit(true, chimp);
-  });
-
-
-  $('.5-meter').on('click', function() {
-    // Mark this chimp as selected.
-    var chimp = exports.getChimpFromElement($(this));
-    exports.showChimpIsSelected(chimp);
-    // Make the within five meters as editable.
-    exports.showWithinFiveToEdit(true, chimp);
-  });
-
-
-  $('.sexual_state').on('click', function() {
-    // Mark this chimp as selected
-    var chimp = exports.getChimpFromElement($(this));
-    exports.showChimpIsSelected(chimp);
-    // Make the estrus state editable.
-    exports.showEstrusToEdit(true, chimp);
-  });
-
-
-  $('.closeness').on('click', function() {
-    // mark this chimp as selected
-    var chimp = exports.getChimpFromElement($(this));
-    exports.showChimpIsSelected(chimp);
-    // Make the closeness editable
-    exports.showClosestToEdit(true, chimp);
-  });
-
-};
-
-
-exports.initializeFood = function(control) {
-  var $startTime = $('#start-time-food');
-  var $endTime = $('#end-time-food');
-
-  appendTimesToSelect($startTime);
-  appendTimesToSelect($endTime);
-
-  // We'll start with the save button disabled. You have to select valid food
-  // times to enable it.
-  $('#saving_food').prop('disabled', true);
-
-  exports.initializeFoodListeners(control);
-};
-
-
-exports.initializeSpecies = function(control) {
-  var $startTime = $('#start-time-species');
-  var $endTime = $('#end-time-species');
-
-  appendTimesToSelect($startTime);
-  appendTimesToSelect($endTime);
-
-  // Start with the save button disabled.
-  $('#saving_species').prop('disabled', true);
-
-  exports.initializeSpeciesListeners(control);
-};
-
-
-/**
- * Plug in the click listeners in the UI.
- */
-exports.initializeListeners = function(control) {
-
-  $('#next-button').on('click', function() {
-
-    var $closestElement = $('.closeness[__data=1]');
-    var noClosestOk = false;
-    if ($closestElement.length === 0) {
-      noClosestOk = confirm('Hakuna sokwe jirani. Una uhakika?');
-    } else {
-      noClosestOk = true;
-    }
-
-    var $withinFiveElement = $('.5-meter[__data=1]');
-    var noneWithin5Ok = false;
-    if ($withinFiveElement.length === 0) {
-      noneWithin5Ok = confirm('Hakuna sokwe ndani ya 5m. Una uhakika?');
-    } else {
-      noneWithin5Ok = true;
-    }
-
-    if (!noClosestOk || !noneWithin5Ok) {
-      return;
-    }
-
-    exports.showLoadingScreen(true);
-
-    // Prepare the url we're going to use for the next timepoint.
-    var nextTime = util.incrementTime(urls.getFollowTimeFromUrl());
-    var queryString = urls.createParamsForFollow(
-      urls.getFollowDateFromUrl(),
-      nextTime,
-      urls.getFocalChimpIdFromUrl(),
-      urls.getCommunityFromUrl()
-    );
-    var url = control.getFileAsUrl('assets/followScreen.html' + queryString);
-
-    // Navigate to that url to move to the next timepoint.
-    window.location.href = url;
-  });
-
-  $('#button-food').on('click', function() {
-    showFood();
-  });
-
-  $('.go-back').on('click', function() {
-    showChimps();
-    clearSpeciesAndFoodSelected();
-  });
-
-  $('#button-species').on('click', function() {
-    showSpecies();
-  });
-
-  $('.chimp').on('click', function() {
-    var chimpId = $(this).prop('id');
-    //chimpid = chimpId;
-    var chimp = exports.getChimpFromUi(chimpId);
-    if (!chimp) {
-      console.log(
-        'could not find chimp represented in UI with id: ' + chimpId
-      );
-    }
-
-    exports.showChimpIsSelected(chimp);
-
-    exports.showTimeIndicatorsToEdit(true, chimp);
-  });
-
-  // Add listeners to the elements important for each chimp
-  exports.initializeChimpListeners();
-
-  // Add listeners for the editing items
-  exports.initializeEditListeners(control);
-
-};
-
-
-/**
- * Show the time (arrival/departure) indicators in the save div.
- */
-exports.showTimeIndicatorsToEdit = function(show, chimp) {
-  if (!show) {
-    $('.time').addClass('novisibility');
-    return;
-  }
-  // If a chimp has arrived or is empty, we want to display the arrival
-  // options. This means that a chimp won't be able to arrive and leave in the
-  // same interval, but this was told to be ok. It simplifies our db logic for
-  // sure, as we can stick to the 'single record per chimp per interval' model.
-  var $timeIndicators;
-  switch (chimp.time) {
-    case timeLabels.absent:
-    case timeLabels.arriveFirst:
-    case timeLabels.arriveSecond:
-    case timeLabels.arriveThird:
-      $timeIndicators = $('.arrival');
-      break;
-    case timeLabels.continuing:
-    case timeLabels.departFirst:
-    case timeLabels.departSecond:
-    case timeLabels.departThird:
-      $timeIndicators = $('.depart');
-      break;
-    default:
-      console.log('unrecognized chimp.time: ' + chimp.time);
-  }
-  $timeIndicators.removeClass('novisibility');
-  // TODO: select the correct image as selected
-  console.log('need to indicate the correct time in the save div: ' + chimp);
-};
-
-
-/**
- * Show the certainty as editable for the given chimp. if show is falsey, hide
- * the ui instead.
- */
-exports.showCertaintyToEdit = function(show, chimp) {
-  var $certaintyIndicator = $('#certainty');
-
-  if (show) {
-    $certaintyIndicator.removeClass('novisibility');
-  } else {
-    $certaintyIndicator.addClass('novisibility');
-    return;
-  }
-
-  // Get all the certainty radio buttons, then filter for the one with the
-  // matching value and set it to checked.
-  var $allCertainty = $('input[name=certain]:radio');
-  var $targetButton = $allCertainty.filter('[value=' + chimp.certainty + ']');
-
-  if ($targetButton.length === 0) {
-    console.log('Did not find radio certainty button for chimp: ' + chimp);
-    return;
-  }
-  
-  $targetButton.prop('checked', true);
-};
-
-
-exports.showWithinFiveToEdit = function(show, chimp) {
-  var $withinFiveIndicator = $('#distance');
-
-  if (show) {
-    $withinFiveIndicator.removeClass('novisibility');
-  } else {
-    $withinFiveIndicator.addClass('novisibility');
-    return;
-  }
-
-  // select the values for the chimp.
-  var $allWithinFive = $('input[name=distance]:radio');
-  var $targetButton = $allWithinFive.filter(
-      '[value=' + chimp.withinFive + ']'
-  );
-
-  if ($targetButton.length === 0) {
-    console.log('Did not find radio w/in 5 for chimp: ' + chimp);
-  }
-
-  $targetButton.prop('checked', true);
-};
-
-
-exports.showEstrusToEdit = function(show, chimp) {
-  var $estrusIndicator = $('#state');
-
-  if (show) {
-    $estrusIndicator.removeClass('novisibility');
-  } else {
-    $estrusIndicator.addClass('novisibility');
-    return;
-  }
-
-  // select the values for the chimp.
-  var $allEstrus = $('input[name=sex_state]:radio');
-  var $targetButton = $allEstrus.filter(
-      '[value=' + chimp.estrus + ']'
-  );
-
-  if ($targetButton.length === 0) {
-    console.log('Did not find radio estrus for chimp: ' + chimp);
-  }
-
-  $targetButton.prop('checked', true);
-};
-
-
-exports.showClosestToEdit = function(show, chimp) {
-  var $closestIndicator = $('#close_focal');
-
-  if (show) {
-    $closestIndicator.removeClass('novisibility');
-  } else {
-    $closestIndicator.addClass('novisibility');
-    return;
-  }
-
-  // select the values for the chimp.
-  var $allClosest = $('input[name=close]:radio');
-  var $targetButton = $allClosest.filter(
-      '[value=' + chimp.closest + ']'
-  );
-
-  if ($targetButton.length === 0) {
-    console.log('Did not find radio closest for chimp: ' + chimp);
-  }
-
-  $targetButton.prop('checked', true);
-};
-
-
-/**
- * Get the chimp id from the element relating to a chimp's observation. E.g.
- * the within five meters, arrival/departure, certainty, etc elements.
- */
-exports.getChimpIdFromElement = function($element) {
-  var id = $element.prop('id');
-  var chimpId = id.split('_')[0];
-  return chimpId;
-};
-
-
-/**
- * Get the Chimp from the element relating to a chimp's observation. E.g. the
- * within five meters, arrival/departure, certainty, etc elements.
+ * Create a where clause for use in a Tables query. columns must be an array
+ * of strings.
  *
- * This is a convenience method for calling getChimpIdFromElement and
- * getChimpFromUi.
+ * ['foo', 'bar'] would create something like:
+ *  foo = ? AND bar = ?
  */
-exports.getChimpFromElement = function($element) {
-  var id = exports.getChimpIdFromElement($element);
-  var chimp = exports.getChimpFromUi(id);
-  return chimp;
-};
-
-
-/**
- * Get the selected Chimp by querying the UI. 
- */
-exports.getSelectedChimp = function() {
-
-  // We're going to use the '.selected-chimp' class.
-  var $chimpElement = $('.selected-chimp');
-
-  var chimpId = $chimpElement.prop('id');
-
-  var chimp = exports.getChimpFromUi(chimpId);
-
-  return chimp;
-
-};
-
-
-/**
- * Show that the current chimp has been selected.
- */
-exports.showChimpIsSelected = function(chimp) {
-  // first unselect all other chimps, as we can only ever have one selected.
-  $('*').removeClass('selected-chimp');
-
-  // also remove all existing editing options
-  exports.showCertaintyToEdit(false);
-  exports.showWithinFiveToEdit(false);
-  exports.showEstrusToEdit(false);
-  exports.showClosestToEdit(false);
-  exports.showTimeIndicatorsToEdit(false);
-  
-  // Then select the passed in chimp.
-  // The chimp as represented as elements for the user.
-  var $chimpUser = $('#' + chimp.chimpId);
-
-  $chimpUser.addClass('selected-chimp');
-};
-
-
-/**
- * Show or hide the loading screen.
- */
-exports.showLoadingScreen = function(show) {
-  var $loading = $('#loading');
-
-  if (show) {
-    $loading.css('visibility', 'visible');
-  } else {
-    $loading.css('visibility', 'hidden');
-  }
-};
-
-
-/**
- * Return the Chimp with the matching chimpId by querying the UI. This does NOT
- * query the database for a chimp, making it a fast call.
- */
-exports.getChimpFromUi = function(chimpId) {
-
-  if (!chimpId) {
-    console.log('chimp id not defined: ' + chimpId);
-    window.alert('chimp id not defined: ' + chimpId);
-    throw new Error('chimp id not defind: ' + chimpId);
-  }
-
-  var $time = $('#' + chimpId + '_time');
-  var $certainty = $('#' + chimpId + '_cer');
-  var $withinFive = $('#' + chimpId + '_five');
-  var $estrus = $('#' + chimpId + '_sexState');
-  var $closest = $('#' + chimpId + '_close');
-
-  var rowId = $('#' + chimpId).attr('rowId');
-  var date = urls.getFollowDateFromUrl();
-  var followStartTime = urls.getFollowTimeFromUrl();
-  var focalChimpId = urls.getFocalChimpIdFromUrl();
-
-  var result = new models.Chimp(
-      rowId,
-      date,
-      followStartTime,
-      focalChimpId,
-      chimpId,
-      $time.attr('__data'),
-      $certainty.attr('__data'),
-      $withinFive.attr('__data'),
-      $estrus.attr('__data'),
-      $closest.attr('__data')
-  );
-
+exports.createWhereClause = function createWhereClause(columns) {
+  var result = '';
+  columns.forEach(function(value, index, array) {
+    result += value + ' = ?';
+    if (index !== array.length - 1) {
+      result += ' AND ';
+    }
+  });
   return result;
 };
 
 
 /**
- * Return the active food from the summary UI. Does NOT have to be a valid food
- * that can be saved.
+ * Get an array of FollowInterval objects for the Follow specified by the date,
+ * beginTime, and focalId.
  */
-exports.getFoodFromUi = function() {
-  var startTime = $('#food-summary-start-time').attr('__data');
-  var endTime = $('#food-summary-end-time').attr('__data');
-  var food = $('#food-summary-food').attr('__data');
-  var foodPart = $('#food-summary-part').attr('__data');
+exports.getFollowIntervalsForFollow = function getFollowIntervalsForFollow(
+    control,
+    date,
+    focalId
+) {
+  // The query requires a paired chimp. Currently, there's always a row that
+  // pairs a chimp with itself, so we will depend on that row for this query.
+  var table = tables.chimpObservation;
+  var cols = table.columns;
 
-  var date = urls.getFollowDateFromUrl();
-  var focalId = urls.getFocalChimpIdFromUrl();
-
-  var rowId = $('#food-summary').attr('__rowid');
-  if (rowId === '') {
-    rowId = null;
-  }
-
-  var result = new models.Food(
-      rowId,
-      date,
-      focalId,
-      startTime,
-      endTime,
-      food,
-      foodPart
+  var whereClause = exports.createWhereClause(
+    [
+      cols.date,
+      cols.focalId,
+      cols.chimpId
+    ]
   );
 
+  var selectionArgs = [date, focalId, focalId];
+
+  var tableData = control.query(
+      table.tableId,
+      whereClause,
+      selectionArgs
+  );
+
+  var result = exports.convertTableDataToFollowIntervals(tableData);
   return result;
 };
 
 
 /**
- * Return the active species from the summary UI.
+ * Get a query for all the data at the given date and time for the specified
+ * focal chimp. Together this specifies a unique time point in a follow.
  */
-exports.getSpeciesFromUi = function() {
-  var startTime = $('#species-summary-start-time').attr('__data');
-  var endTime = $('#species-summary-end-time').attr('__data');
-  var species = $('#species-summary-name').attr('__data');
-  var number = $('#species-summary-number').attr('__data');
-
-  var date = urls.getFollowDateFromUrl();
-  var focalId = urls.getFocalChimpIdFromUrl();
-
-  var rowId = $('#species-summary').attr('__rowid');
-  if (rowId === '') {
-    rowId = null;
-  }
-
-  var result = new models.Species(
-      rowId,
-      date,
-      focalId,
-      startTime,
-      endTime,
-      species,
-      number
-  );
-
-  return result;
-};
-
-
-/**
- * Make chimp-specific items visible as necessary. E.g. if the chimp is
- * present, it should be possible to edit the certainty, etc. To be editble
- * they have to be visible.
- */
-exports.updateVisiblityForChimp = function(chimp) {
-  var timeId = getIdForTime(chimp);
-  var $time = $('#' + timeId);
-
-  var withinFiveId = getIdForWithinFiveMeters(chimp);
-  var $withinFive = $('#' + withinFiveId);
-
-  var certaintyId = getIdForCertainty(chimp);
-  var $certainty = $('#' + certaintyId);
-
-  var estrusId = getIdForEstrus(chimp);
-  var $estrus = $('#' + estrusId);
-
-  var closestId = getIdForClosest(chimp);
-  var $closest = $('#' + closestId);
-
-  // We want to make things editable in every instance except absence.
-  if (chimp.time !== timeLabels.absent) {
-    $time.removeClass('novisibility');
-    $withinFive.removeClass('novisibility');
-    $certainty.removeClass('novisibility');
-    $estrus.removeClass('novisibility');
-    $closest.removeClass('novisibility');
-  } else {
-    $time.addClass('novisibility');
-    $withinFive.addClass('novisibility');
-    $certainty.addClass('novisibility');
-    $estrus.addClass('novisibility');
-    $closest.addClass('novisibility');
-  }
-};
-
-
-/**
- * Updates the UI after loading a page.
- *
- * This used to be called 'display', in case you're looking for that method.
- */
-exports.initializeUi = function(control) {
-
-  logging.initializeLogging();
-
-  $('.food-container').addClass('nodisplay');
-  $('.species-container').addClass('nodisplay');
-
-  exports.updateUiForCommunity();
-
-  // Hide the editing UI to start with.
-  //$('#time').addClass('novisibility');
-  $('.arrival').addClass('novisibility');
-  $('.depart').addClass('novisibility');
-  $('#certainty').addClass('novisibility');
-  $('#distance').addClass('novisibility');
-  $('#state').addClass('novisibility');
-  $('#close_focal').addClass('novisibility');
-
-  exports.updateUiForFollowTime();
-  exports.updateUiForFocalId();
-  exports.initializePreviousButton(control);
-
-  exports.initializeListeners(control);
-  exports.initializeFood(control);
-  exports.initializeSpecies(control);
-
-  // And now we need to deal with the actual chimps themselves. There are two
-  // possibilities here:
-  //  1) we are recovering an existing timepoint, in which case we will be
-  //     retrieving values from the database
-  //  2) we are starting a new time point, in which case we need to create a
-  //     bunch of new entries
-  var existingData = db.getTableDataForTimePoint(
-      control,
-      urls.getFollowDateFromUrl(),
-      urls.getFollowTimeFromUrl(),
-      urls.getFocalChimpIdFromUrl()
-  );
-
-  if (!existingData || existingData.getCount() === 0) {
-    exports.handleFirstTime(
-        control,
-        urls.getFollowDateFromUrl(),
-        urls.getFollowTimeFromUrl(),
-        urls.getFocalChimpIdFromUrl()
-    );
-  } else {
-    exports.handleExistingTime(
-        control,
-        urls.getFollowDateFromUrl(),
-        urls.getFollowTimeFromUrl(),
-        urls.getFocalChimpIdFromUrl(),
-        existingData
-    );
-  }
-
-  exports.refreshSpeciesList(control);
-  exports.refreshFoodList(control);
-
-  // 15 minutes
-  var intervalDuration = 1000 * 60 * 15;
-  window.setTimeout(exports.updateUiForEndOfInterval, intervalDuration);
-
-};
-
-
-/**
- * Set up the screen for a time point we've not yet visited.
- */
-exports.handleFirstTime = function(
+exports.getTableDataForTimePoint = function(
     control,
     date,
     followStartTime,
     focalChimpId
 ) {
-  // We are seeing a timepoint for the first time. The general idea is this:
-  // 1) Create Chimp objects for all the chimps we're going to need. These are
-  // not going to have rowId objects, but just be 'default' chimp observations.
-  //
-  // 2) Write these default chimps to the database.
-  //
-  // 3) Read back out the chimps for this timepoint from the database. This
-  // will be the values we just created, except that these will also have
-  // rowIds for each of the chimps. We assume all chimps in the UI have rowIds,
-  // so this is important.
-  //
-  // 4) update the ui for the chimps
 
-  var chimpIds = exports.getChimpIdsFromUi();
+  var table = tables.chimpObservation;
 
-  var chimps = [];
+  var whereClause = exports.createWhereClause(
+    [
+      table.columns.date,
+      table.columns.focalId,
+      table.columns.followStartTime
+    ]
+  );
 
-  // 1) create the chimps
-  chimpIds.forEach(function(value) {
-    var newChimp = models.createNewChimp(
-      date,
-      followStartTime,
-      focalChimpId,
-      value
+  var selectionArgs = [date, focalChimpId, followStartTime];
+
+  var result = control.query(
+      table.tableId,
+      whereClause,
+      selectionArgs
+  );
+
+  return result;
+};
+
+
+/**
+ * Convert a TableData object that has queried the chimpObservation table to an
+ * array of FollowInterval objects.
+ */
+exports.convertTableDataToFollowIntervals = function(data) {
+  var result = [];
+
+  var cols = tables.chimpObservation.columns;
+
+  if (!data) {
+    return result;
+  }
+
+  for (var i = 0; i < data.getCount(); i++) {
+    var date = data.getData(i, cols.date);
+    var beginTime = data.getData(i, cols.followStartTime);
+    var focalId = data.getData(i, cols.focalId);
+
+    var followInterval = new models.FollowInterval(date, beginTime, focalId);
+
+    result.push(followInterval);
+  }
+
+  return result;
+};
+
+
+exports.convertTableDataToSpecies = function(data) {
+  var result = [];
+  var cols = tables.species.columns;
+
+  if (!data) {
+    return result;
+  }
+
+  for (var i = 0; i < data.getCount(); i++) {
+    var date = data.getData(i, cols.date);
+    var startTime = data.getData(i, cols.startTime);
+    var endTime = data.getData(i, cols.endTime);
+    var focalId = data.getData(i, cols.focalId);
+    var speciesName = data.getData(i, cols.speciesName);
+    var speciesCount = data.getData(i, cols.speciesCount);
+    var rowId = data.getRowId(i);
+
+    var species = new models.Species(
+        rowId,
+        date,
+        focalId,
+        startTime,
+        endTime,
+        speciesName,
+        speciesCount
     );
-    this.push(newChimp);
-  },
-    chimps
+
+    result.push(species);
+  }
+
+  return result;
+};
+
+
+exports.convertTableDataToFood = function(data) {
+  var result = [];
+  var cols = tables.food.columns;
+
+  if (!data) {
+    return result;
+  }
+
+  for (var i = 0; i < data.getCount(); i++) {
+    var rowId = data.getRowId(i);
+
+    var date = data.getData(i, cols.date);
+    var focalId = data.getData(i, cols.focalId);
+    var foodName = data.getData(i, cols.foodName);
+    var foodPart = data.getData(i, cols.foodPart);
+    var startTime = data.getData(i, cols.startTime);
+    var endTime = data.getData(i, cols.endTime);
+
+    var food = new models.Food(
+        rowId,
+        date,
+        focalId,
+        startTime,
+        endTime,
+        foodName,
+        foodPart
+    );
+
+    result.push(food);
+  }
+
+  return result;
+};
+
+
+/**
+ * Convert a table data (eg as returned by getTableDataForTimepoint) to an
+ * array of Chimp objects.
+ */
+exports.convertTableDataToChimps = function(data) {
+
+  var result = [];
+
+  var cols = tables.chimpObservation.columns;
+
+  if (!data) {
+    return result;
+  }
+
+  for (var i = 0; i < data.getCount(); i++) {
+
+    var rowId = data.getRowId(i);
+
+    var chimpId = data.getData(i, cols.chimpId).trim();
+    var time = data.getData(i, cols.time).trim();
+    var certainty = data.getData(i, cols.certainty).trim();
+    var withinFive = data.getData(i, cols.withinFive).trim();
+    var estrus = data.getData(i, cols.estrus).trim();
+    var closest = data.getData(i, cols.closest).trim();
+    var focalChimpId = data.getData(i, cols.focalId).trim();
+    var date = data.getData(i, cols.date).trim();
+    var followStartTime = data.getData(i, cols.followStartTime).trim();
+
+    var newChimp = new models.Chimp(
+        rowId,
+        date,
+        followStartTime,
+        focalChimpId,
+        chimpId,
+        time,
+        certainty,
+        withinFive,
+        estrus,
+        closest
+    );
+
+    result.push(newChimp);
+
+  }
+
+  return result;
+
+};
+
+
+/**
+ * Convert a TableData object to a list of Follow objects.
+ */
+exports.convertTableDataToFollows = function convertTableDataToFollows(data) {
+  var result = [];
+
+  var cols = tables.follow.columns;
+
+  if (!data) {
+    return result;
+  }
+
+  for (var i = 0; i < data.getCount(); i++) {
+    var date = data.getData(i, cols.date);
+    var beginTime = data.getData(i, cols.beginTime);
+    var focalId = data.getData(i, cols.focalId);
+    var communityId = data.getData(i, cols.communityId);
+    var researcher = data.getData(i, cols.researcher);
+
+    var follow = new models.Follow(
+        date,
+        beginTime,
+        focalId,
+        communityId,
+        researcher
+    );
+
+    result.push(follow);
+  }
+
+  return result;
+};
+
+
+exports.getFoodDataForTimePoint = function(date, timeBegin, focalChimpId) {
+
+  var table = tables.food;
+
+  var whereClause = exports.createWhereClause(
+    [
+      table.columns.date,
+      table.columns.focalId,
+      table.columns.timeBegin
+    ]
   );
 
+  var selectionArgs = [date, focalChimpId, timeBegin];
 
-  // update the chimps for the previous timepoint
-  var prevChimps = getChimpsForPreviousTimepoint(
-      control,
-      followStartTime,
-      date,
-      focalChimpId
-  );
-  chimps = db.updateChimpsForPreviousTimepoint(prevChimps, chimps, false);
-
-  // 2) write the chimps
-  chimps.forEach(function(chimp) {
-    db.writeRowForChimp(control, chimp, false);
-  });
-
-  // 3) read the chimps back in for this time point.
-  var tableData = db.getTableDataForTimePoint(
-      control,
-      date,
-      followStartTime,
-      focalChimpId
+  var result = control.query(
+      table.tableId,
+      whereClause,
+      selectionArgs
   );
 
-  chimps = db.convertTableDataToChimps(tableData);
+  return result;
+
+};
+
+exports.getFoodDataForDate = function(control, date, focalChimpId) {
+
+  var table = tables.food;
+
+  var whereClause = exports.createWhereClause(
+    [
+      table.columns.date,
+      table.columns.focalId
+    ]
+  );
+
+  var selectionArgs = [date, focalChimpId];
+
+  var result = control.query(
+      table.tableId,
+      whereClause,
+      selectionArgs
+  );
+
+  return result;
+
+};
+
+exports.getSpeciesDataForTimePoint = function(date, timeBegin, focalChimpId) {
+
+  var table = tables.species;
+
+  var whereClause = exports.createWhereClause(
+    [
+      table.columns.date,
+      table.columns.focalId,
+      table.column.timeBegin
+    ]
+  );
+
+  var selectionArgs = [date, focalChimpId, timeBegin];
+
+  var result = control.query(
+      table.tableId,
+      whereClause,
+      selectionArgs
+  );
+
+  return result;
+
+};
+
+exports.getSpeciesDataForDate = function(control, date, focalChimpId) {
+
+  var table = tables.species;
+
+  var whereClause = exports.createWhereClause(
+    [
+      table.columns.date,
+      table.columns.focalId,
+    ]
+  );
+
+  var selectionArgs = [date, focalChimpId];
+
+  var result = control.query(
+      table.tableId,
+      whereClause,
+      selectionArgs
+  );
+
+  return result;
+
+};
+
+/**
+ * Get a query for all the data at the given date and time for all
+ * the chimps
+ */
+exports.getUpdateAboutAllChimps = function(date, time) {
+
+  var table = tables.followArrival;
+
+  var whereClause = exports.createWhereClause(
+    [
+      table.columns.date,
+      table.columns.time,
+    ]
+  );
+
+  var selectionArgs = [date, time];
+
+  var result = control.query(
+      table.tableId,
+      whereClause,
+      selectionArgs
+  );
+
+  return result;
+
+};
+
+
+/**
+ * Return an array of all the Follow objects in the database.
+ *
+ * Note that this returns actual Follow objects, NOT a TableData object
+ * containing all follows.
+ */
+exports.getAllFollows = function getAllFollows(control) {
+  var table = tables.follow;
+
+  var tableData = control.query(table.tableId, null, null);
+
+  var result = exports.convertTableDataToFollows(tableData);
+  return result;
+};
+
+
+/**
+ * Get the Follow for the given date and focal chimp.
+ */
+exports.getFollowForDateAndChimp = function(control, date, focalId) {
+  var table = tables.follow;
+  var cols = table.columns;
+
+  var whereClause = exports.createWhereClause(
+    [
+      cols.date,
+      cols.focalId
+    ]
+  );
+  var selectionArgs = [date, focalId];
+
+  var tableData = control.query(
+      table.tableId,
+      whereClause,
+      selectionArgs
+  );
+
+  var result = exports.convertTableDataToFollows(tableData);
+  return result;
+};
+
+/**
+ * Write a follow object (as defined in the models module).
+ */
+exports.writeNewFollow = function(control, follow) {
+
+  var table = tables.follow;
+  var cols = table.columns;
   
-  // 4) update the UI for the chimps
-  chimps.forEach(function(chimp) {
-    exports.updateUiForChimp(chimp);
-  });
+  var struct = {};
 
+  struct[cols.date] = follow.date;
+  struct[cols.beginTime] = follow.beginTime;
+  struct[cols.focalId] = follow.focalId;
+  struct[cols.communityId] = follow.communityId;
+  struct[cols.researcher] = follow.researcher;
 
-};
+  var stringified = JSON.stringify(struct);
 
-
-/**
- * Set up the screen for a time point we've already visited.
- */
-exports.handleExistingTime = function(
-    control,
-    date,
-    startTime,
-    focalId,
-    existingData
-) {
-
-  // Find previous data and update the chimps in case one was added
-  // retroActively.
-  var currChimps = db.convertTableDataToChimps(existingData);
-  var prevChimps = getChimpsForPreviousTimepoint(
-      control,
-      startTime,
-      date,
-      focalId
-  );
-
-  currChimps = db.updateChimpsForPreviousTimepoint(
-      prevChimps,
-      currChimps,
-      true
-  );
-
-  // Now write them. We don't have to read them back in because we are writing
-  // what we currently have as ground truth, we don't need to create row ids
-  // like we do for handleFirstTime.
-  currChimps.forEach(function(chimp) {
-    db.writeRowForChimp(control, chimp, true);
-  });
-
-  currChimps.forEach(function(chimp) {
-    exports.updateUiForChimp(chimp);
-  });
+  control.addRow(table.tableId, stringified);
 
 };
 
 
 /**
- * Get an array of all the chimp ids by querying the UI. Fast call.
+ * Write a row for the chimp into the database.
+ *
+ * If isUpdate is truthy, it instead updates, rather than adds a rwo, and the
+ * rowId property of the chimp must be valid.
  */
-exports.getChimpIdsFromUi = function() {
+exports.writeRowForChimp = function(control, chimp, isUpdate) {
 
-  // For legacy reasons, we're going to do this by getting all the male and
-  // female chimps and concatenating the results.
-  var $maleChimps = $('.male-chimp');
-  var $femaleChimps = $('.female-chimp');
-  
-  var allChimps = $maleChimps.toArray().concat($femaleChimps.toArray());
+  var table = tables.chimpObservation;
+  var cols = table.columns;
 
-  var chimpIds = [];
+  // We're going to assume that all variable have a value. In otherwords, there
+  // can be no defaults that are cannot be written to the database. We write
+  // every value.
+  var struct = {};
+  struct[cols.date] = chimp.date;
+  struct[cols.followStartTime] = chimp.followStartTime;
+  struct[cols.time] = parseInt(chimp.time);
+  struct[cols.focalId] = chimp.focalChimpId;
+  struct[cols.chimpId] = chimp.chimpId;
+  struct[cols.certainty] = parseInt(chimp.certainty);
+  struct[cols.withinFive] = parseInt(chimp.withinFive);
+  struct[cols.closest] = parseInt(chimp.closest);
+  struct[cols.estrus] = chimp.estrus;
 
-  allChimps.forEach(function(value) {
-    this.push(value.id);
-  },
-    chimpIds
-  );
+  var stringified = JSON.stringify(struct);
 
-  return chimpIds;
-
-};
-
-
-/**
- * Below is Firefox's cookies library.
- * TODO: This should be converted to browserify made available to the rest of the
- * project.
- */
-
-/*\
-|*|
-|*|  :: cookies.js ::
-|*|
-|*|  A complete cookies reader/writer framework with full unicode support.
-|*|
-|*|  Revision #1 - September 4, 2014
-|*|
-|*|  https://developer.mozilla.org/en-US/docs/Web/API/document.cookie
-|*|  https://developer.mozilla.org/User:fusionchess
-|*|
-|*|  This framework is released under the GNU Public License, version 3 or later.
-|*|  http://www.gnu.org/licenses/gpl-3.0-standalone.html
-|*|
-|*|  Syntaxes:
-|*|
-|*|  * docCookies.setItem(name, value[, end[, path[, domain[, secure]]]])
-|*|  * docCookies.getItem(name)
-|*|  * docCookies.removeItem(name[, path[, domain]])
-|*|  * docCookies.hasItem(name)
-|*|  * docCookies.keys()
-|*|
-\*/
-
-var docCookies = {
-  getItem: function (sKey) {
-    if (!sKey) { return null; }
-    return decodeURIComponent(document.cookie.replace(new RegExp("(?:(?:^|.*;)\\s*" + encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&") + "\\s*\\=\\s*([^;]*).*$)|^.*$"), "$1")) || null;
-  },
-  setItem: function (sKey, sValue, vEnd, sPath, sDomain, bSecure) {
-    if (!sKey || /^(?:expires|max\-age|path|domain|secure)$/i.test(sKey)) { return false; }
-    var sExpires = "";
-    if (vEnd) {
-      switch (vEnd.constructor) {
-        case Number:
-          sExpires = vEnd === Infinity ? "; expires=Fri, 31 Dec 9999 23:59:59 GMT" : "; max-age=" + vEnd;
-          break;
-        case String:
-          sExpires = "; expires=" + vEnd;
-          break;
-        case Date:
-          sExpires = "; expires=" + vEnd.toUTCString();
-          break;
-      }
+  if (isUpdate) {
+    var rowId = chimp.rowId;
+    if (!rowId) {
+      throw new Error('chimp.rowId was falsey!');
     }
-    document.cookie = encodeURIComponent(sKey) + "=" + encodeURIComponent(sValue) + sExpires + (sDomain ? "; domain=" + sDomain : "") + (sPath ? "; path=" + sPath : "") + (bSecure ? "; secure" : "");
-    return true;
-  },
-  removeItem: function (sKey, sPath, sDomain) {
-    if (!this.hasItem(sKey)) { return false; }
-    document.cookie = encodeURIComponent(sKey) + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT" + (sDomain ? "; domain=" + sDomain : "") + (sPath ? "; path=" + sPath : "");
-    return true;
-  },
-  hasItem: function (sKey) {
-    if (!sKey) { return false; }
-    return (new RegExp("(?:^|;\\s*)" + encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&") + "\\s*\\=")).test(document.cookie);
-  },
-  keys: function () {
-    var aKeys = document.cookie.replace(/((?:^|\s*;)[^\=]+)(?=;|$)|^\s*|\s*(?:\=[^;]*)?(?:\1|$)/g, "").split(/\s*(?:\=[^;]*)?;\s*/);
-    for (var nLen = aKeys.length, nIdx = 0; nIdx < nLen; nIdx++) { aKeys[nIdx] = decodeURIComponent(aKeys[nIdx]); }
-    return aKeys;
+    control.updateRow(table.tableId, stringified, rowId);
+  } else {
+    control.addRow(table.tableId, stringified);
+  }
+
+};
+
+
+/**
+ * Update an array of Chimp objects based on an existing time point. If
+ * isRetroactive is true, it implies that this is being performed after a time
+ * point has already had data filled out manually, rather than being seen for
+ * the first time. In this case the chimp is updated if:
+ * 1) the current chimp was absent
+ * 2) prev is absent or departed and curr is not arrived (b/c a chimp must
+ * arrive before it can be present)
+ */
+exports.updateChimpsForPreviousTimepoint = function(
+    prev,
+    curr,
+    isRetroactive
+) {
+  if (prev.length === 0) {
+    return curr;
+  } else if (prev.length !== curr.length) {
+    throw new Error('previous and current chimps not the same size');
+  }
+
+  var prevMap = {};
+  var currMap = {};
+
+  for (var i = 0; i < prev.length; i++) {
+    var prevChimpId = prev[i].chimpId;
+    var currChimpId = curr[i].chimpId;
+    prevMap[prevChimpId] = prev[i];
+    currMap[currChimpId] = curr[i];
+  }
+
+  var result = [];
+  prev.forEach(function(chimp) {
+    var chimpId = chimp.chimpId;
+    var prevChimp = prevMap[chimpId];
+    var currChimp = currMap[chimpId];
+    if (!prevChimp || !currChimp) {
+      throw new Error('did not find prev or curr chimp with id: ' + chimpId);
+    }
+
+    // Handle the case for going back in time and adding a chimp retroactively.
+    // In this case we want to overwrite ONLY the chimps that are not present
+    // now but were present in the previous timepoint. This will prevent
+    // overwriting previously manually entered data, which would happen if we
+    // did a raw update.
+    if (isRetroactive) {
+      if (currChimp.time === exports.timeLabels.absent) {
+        result.push(
+          exports.updateChimpForPreviousTimepoint(prevChimp, currChimp)
+        );
+      } else if (
+          chimpIsDepartedOrAbsent(prevChimp) &&
+          !chimpIsArrived(currChimp)
+      ) {
+        result.push(
+            exports.updateChimpForPreviousTimepoint(prevChimp, currChimp)
+        );
+      } else {
+        result.push(currChimp);
+      }
+    } else {
+      result.push(
+          exports.updateChimpForPreviousTimepoint(prevChimp, currChimp)
+      );
+    }
+  });
+
+  return result;
+};
+
+
+exports.updateChimpForPreviousTimepoint = function(prev, curr) {
+  if (!prev || !curr) {
+    throw new Error('prev and curr chimps must be truthy');
+  }
+
+  if (prev.chimpId !== curr.chimpId) {
+    throw new Error('chimp ids must be identical to update');
+  }
+
+  // The mapping for certainty updates is basically that they remain the same,
+  // except that if it is a nest observation it updates to no nest.
+  var prevCertainty = prev.certainty;
+  var currCertainty = prevCertainty; // sensible default in case of error
+  if (prevCertainty === exports.certaintyLabels.certain) {
+    currCertainty = prevCertainty;
+  } else if (prevCertainty === exports.certaintyLabels.uncertain) {
+    currCertainty = prevCertainty;
+  } else if (prevCertainty === exports.certaintyLabels.nestCertain) {
+    currCertainty = exports.certaintyLabels.certain;
+  } else if (prevCertainty === exports.certaintyLabels.nestUncertain) {
+    currCertainty = exports.certaintyLabels.uncertain;
+  } else {
+    console.log('E: previous certainty not handled: ' + prevCertainty);
+    currCertainty = prevCertainty;
+  }
+  curr.certainty = currCertainty;
+
+  curr.estrus = prev.estrus;
+
+  // chimp was there in the last time slot, update to continuing
+  if (prev.time === exports.timeLabels.arriveThird ||
+      prev.time === exports.timeLabels.arriveSecond ||
+      prev.time === exports.timeLabels.arriveFirst ||
+      prev.time === exports.timeLabels.continuing
+  ) {
+    curr.time = exports.timeLabels.continuing;
+  } else if (chimpIsDepartedOrAbsent(prev) && !chimpIsArrived(curr)) {
+    // A chimp must be absent if it was previously absent or departed, and  the
+    // current chimp is NOT arrived. This prevents valid data from being
+    // overridden. E.g. without the !arrived check, you would overwrite all
+    // valid original arrivals
+    curr.time = exports.timeLabels.absent;
+  }
+
+  return curr;
+};
+
+
+/**
+ * Write a row for the food item into the database.
+ *
+ * If isUpdate is truthy, it instead updates, rather than adds, a row, and the
+ * rowId property of the food must be valid.
+ */
+exports.writeRowForFood = function(control, food, isUpdate) {
+  var table = tables.food;
+  var cols = table.columns;
+
+  var struct = {};
+  struct[cols.focalId] = food.focalChimpId;
+  struct[cols.date] = food.date;
+  struct[cols.foodName] = food.foodName;
+  struct[cols.foodPart] = food.foodPartEaten;
+  struct[cols.startTime] = food.startTime;
+  struct[cols.endTime] = food.endTime;
+
+  var stringified = JSON.stringify(struct);
+
+  if (isUpdate) {
+    var rowId = food.rowId;
+    if (!rowId) {
+      throw new Error('food.rowId was falsey!');
+    }
+    control.updateRow(table.tableId, stringified, rowId);
+  } else {
+    control.addRow(table.tableId, stringified);
   }
 };
 
-},{"./jgiDb":1,"./jgiLogging":2,"./jgiModels":3,"./jgiUrls":5,"./jgiUtil":6,"jquery":7}]},{},[]);
+
+/**
+ * Write a row for the species into the database.
+ *
+ * If isUpdate is truthy, update, rather than add a row. In the case of an
+ * update the rowId property of the species must be valid.
+ */
+exports.writeRowForSpecies = function(control, species, isUpdate) {
+  var table = tables.species;
+  var cols = table.columns;
+
+  var struct = {};
+  struct[cols.focalId] = species.focalChimpId;
+  struct[cols.date] = species.date;
+  struct[cols.speciesName] = species.speciesName;
+  struct[cols.speciesCount] = species.number;
+  struct[cols.startTime] = species.startTime;
+  struct[cols.endTime] = species.endTime;
+
+  var stringified = JSON.stringify(struct);
+
+  if (isUpdate) {
+    var rowId = species.rowId;
+    if (!rowId) {
+      throw new Error('species.foodId was falsey');
+    }
+    control.updateRow(table.tableId, stringified, rowId);
+  } else {
+    control.addRow(table.tableId, stringified);
+  }
+};
+
+},{"./jgiModels":4,"./jgiTables":5}],3:[function(require,module,exports){
+'use strict';
+
+var $ = require('jquery');
+var urls = require('./jgiUrls');
+
+
+exports.DO_LOGGING = true;
+
+
+exports.getFollowRepresentation = function() {
+  var followDate = urls.getFollowDateFromUrl();
+  var focalId = urls.getFocalChimpIdFromUrl();
+  var intervalStart = urls.getFollowTimeFromUrl();
+  var result = followDate + ' ' + focalId + ' ' + intervalStart;
+  return result;
+};
+
+
+
+exports.initializeClickLogger = function() {
+  $('button, select, option, input').click(function() {
+    if (!exports.DO_LOGGING) {
+      return;
+    }
+
+    var followRepresentation = exports.getFollowRepresentation();
+
+    var $thisObj = $(this);
+    var now = new Date().toISOString();
+    console.log(
+      ' jgiLogging: ' +
+      now +
+      ' clickId: ' +
+      $thisObj.prop('id') +
+      ' elementName: ' +
+      $thisObj.get(0).tagName +
+      ' followInfo: ' +
+      followRepresentation
+    );
+  });
+
+};
+
+exports.initializeLogging = function() {
+  exports.initializeClickLogger();
+};
+
+},{"./jgiUrls":6,"jquery":1}],4:[function(require,module,exports){
+'use strict';
+
+/**
+ * The models we will use for rows in the database.
+ */
+
+var util = require('./jgiUtil');
+
+
+/**
+ * A follow, which includes a set of timepoints, where each time point has a
+ * set of observations about chimps.
+ */
+exports.Follow = function Follow(
+    date,
+    beginTime,
+    focalId,
+    communityId,
+    researcher
+) {
+
+  if (!(this instanceof Follow)) {
+    throw new Error('must use new');
+  }
+  
+  this.date = date;
+  this.beginTime = beginTime;
+  this.focalId = focalId;
+  this.communityId = communityId;
+  this.researcher = researcher;
+
+};
+
+
+/**
+ * Represents an interval in a follow. This is essentially a subset of the
+ * information pertaining to a particular chimp during the follow. A
+ * FollowInterval might represent the time between 7:15 and 7:30 of a
+ * particular longer Follow, for instance.
+ *
+ * In an effort to make this even clearer, this object has been fabricated in
+ * order to allow someone to view a list of the timepoints they've seen during
+ * their Follow in order to quickly jump between them or resume where they left
+ * off in event of an app crash.
+ */
+exports.FollowInterval = function FollowInterval(
+    date,
+    beginTime,
+    focalId
+) {
+  if (!(this instanceof FollowInterval)) {
+    throw new Error('must use new');
+  }
+
+  this.date = date;
+  this.beginTime = beginTime;
+  this.focalId = focalId;
+};
+
+
+/**
+ * The observation of a chimp in the a particular timepoint.
+ */
+exports.Chimp = function Chimp(
+    rowId,
+    date,
+    followStartTime,
+    focalChimpId,
+    chimpId,
+    time,
+    certainty,
+    withinFive,
+    estrus,
+    closest
+) {
+
+  if (!(this instanceof Chimp)) {
+    throw new Error('must use new');
+  }
+
+  // for our model only--can be undefined
+  this.rowId = rowId;
+
+  // data that we must set.
+  this.date = date;
+  this.followStartTime = followStartTime;
+  this.focalChimpId = focalChimpId;
+  this.chimpId = chimpId;
+  this.time = time;
+  this.certainty = certainty;
+  this.withinFive = withinFive;
+  this.estrus = estrus;
+  this.closest = closest;
+
+};
+
+
+/**
+ * Create a chimp with the default values. This is ok to represent a chimp that
+ * has not been observed at a given timepoint.
+ */
+exports.createNewChimp = function(
+    date,
+    followStartTime,
+    focalChimpId,
+    chimpId
+) {
+  var defTime = '0';
+  var defCertainty = '1';
+  var defWithinFive = '0';
+  var defEstrus = '0';
+  var defClosest = '0';
+
+  // We don't know the row id when we are creating the chimps. We have to get
+  // it from the database after writing. This is annoying...maybe we can start
+  // creating the row ids and passing them in? TODO
+  var rowId = null;
+
+  // We have to be careful here--the new binding might fail since it is owned
+  // by the exports object. I forget precisely how this works. If weird stuff
+  // is happening, make sure the context object making it to the Chimp
+  // constructor is a new object here.
+  var result = new exports.Chimp(
+      rowId,
+      date,
+      followStartTime,
+      focalChimpId,
+      chimpId,
+      defTime,
+      defCertainty,
+      defWithinFive,
+      defEstrus,
+      defClosest
+  );
+
+  return result;
+
+};
+
+
+/**
+ * The observation of a food item.
+ */
+exports.Food = function Food(
+    rowId,
+    date,
+    focalChimpId,
+    startTime,
+    endTime,
+    foodName,
+    foodPartEaten
+) {
+  if (!(this instanceof Food)) {
+    throw new Error('must use new');
+  }
+
+  // Can be undefined as long as creating a row for the first time
+  this.rowId = rowId;
+
+  this.date = date;
+  this.startTime = startTime;
+  this.foodName = foodName;
+  this.foodPartEaten = foodPartEaten;
+  this.endTime = endTime;
+  this.focalChimpId = focalChimpId;
+};
+
+
+/**
+ * Create a new food observation. Sets rowId to null and endTime to the not
+ * set flag.
+ */
+exports.createNewFood = function(
+    date,
+    focalChimpId,
+    startTime,
+    foodName,
+    foodPartEaten
+) {
+  var rowId = null;
+  var result = new exports.Food(
+      rowId,
+      date,
+      focalChimpId,
+      startTime,
+      util.flagEndTimeNotSet,
+      foodName,
+      foodPartEaten
+  );
+  return result;
+};
+
+
+/**
+ * The observation of a species.
+ */
+exports.Species = function Species(
+    rowId,
+    date,
+    focalChimpId,
+    startTime,
+    endTime,
+    speciesName,
+    number
+) {
+  if (!(this instanceof Species)) {
+    throw new Error('must use new');
+  }
+
+  this.rowId = rowId;
+
+  this.date = date;
+  this.focalChimpId = focalChimpId;
+  this.startTime = startTime;
+  this.endTime = endTime;
+  this.speciesName = speciesName;
+  this.number = number;
+};
+
+
+/**
+ * Create a new species observation. Sets rowId to null and endTime to the not
+ * set flag.
+ */
+exports.createNewSpecies = function(
+    date,
+    focalChimpId,
+    startTime,
+    speciesName,
+    number
+) {
+  var rowId = null;
+  var result = new exports.Species(
+      rowId,
+      date,
+      focalChimpId,
+      startTime,
+      util.flagEndTimeNotSet,
+      speciesName,
+      number
+  );
+  return result;
+};
+
+},{"./jgiUtil":7}],5:[function(require,module,exports){
+'use strict';
+
+/**
+ * Identifiers about the tables we'll need to use for the JGI app.
+ */
+
+exports.chimpObservation = {
+  tableId: 'follow_arrival',
+  columns: {
+    date: 'FA_FOL_date',
+    followStartTime: 'FA_time_start',
+    time: 'FA_duration_of_obs',
+    focalId: 'FA_FOL_B_focal_AnimID',
+    chimpId: 'FA_B_arr_AnimID',
+    certainty: 'FA_type_of_certainty',
+    withinFive: 'FA_within_five_meters',
+    closest: 'FA_closest_to_focal',
+    estrus: 'FA_type_of_cycle'
+  }
+};
+
+exports.species = {
+  tableId: 'other_species',
+  columns: {
+    startTime: 'OS_time_begin',
+    endTime: 'OS_time_end',
+    focalId: 'OS_FOL_B_focal_AnimID',
+    speciesName: 'OS_local_species_name_written',
+    speciesCount: 'OS_duration',
+    date: 'OS_FOL_date'
+  }
+};
+
+exports.food = {
+  tableId: 'food_bout',
+  columns: {
+    date: 'FB_FOL_date',
+    focalId: 'FB_FOL_B_AnimID',
+    foodName: 'FB_FL_local_food_name',
+    foodPart: 'FB_FPL_local_food_part',
+    startTime: 'FB_begin_feed_time',
+    endTime: 'FB_end_feed_time'
+  }
+};
+
+exports.follow = {
+  tableId: 'follow',
+  columns: {
+    date: 'FOL_date',
+    focalId: 'FOL_B_AnimID',
+    communityId: 'FOL_CL_community_id',
+    beginTime: 'FOL_time_begin',
+    researcher: 'FOL_am_observer1'
+  }
+};
+
+},{}],6:[function(require,module,exports){
+'use strict';
+
+/**
+ * Functions for manipulating URLs in the JGI app.
+ */
+
+/**
+ * Query parameters we expect on URLs e.g. '?date=BLAH'.
+ */
+exports.queryParameters = {
+  date: 'follow_date',
+  time: 'follow_time',
+  focalChimp: 'focal_chimp',
+
+  beginToEat: 'begin_eating',
+  eatenFood: 'eaten_food',
+  eatenFoodPart: 'eaten_foodPart',
+
+  timeOfPresence: 'time_presence',
+  speciesName: 'name_species',
+  numOfSpecies: 'num_of_species',
+  isReview: 'review',
+
+  community: 'community',
+};
+
+
+/**
+ * Get the query parameter from the url. Note that this is kind of a hacky/lazy
+ * implementation that will fail if the key string appears more than once, etc.
+ */
+exports.getQueryParameter = function(key) {
+  var href = document.location.search;
+  var startIndex = href.search(key);
+  if (startIndex < 0) {
+    console.log('[jgiUrls.js] requested query parameter not found: ' + key);
+    return null;
+  }
+  // Then we want the substring beginning after "key=".
+  var indexOfValue = startIndex + key.length + 1;  // 1 for '='
+  // And now it's possible that we have more than a single url parameter, so
+  // only take as many characters as we need. We'll stop at the first &,
+  // which is what specifies more keys.
+  var fromValueOnwards = href.substring(indexOfValue);
+  var stopAt = fromValueOnwards.search('&');
+  if (stopAt < 0) {
+    return decodeURIComponent(fromValueOnwards);
+  } else {
+    return decodeURIComponent(fromValueOnwards.substring(0, stopAt));
+  }
+};
+
+exports.createParamsForFollow = function(date, time, focalChimp, community) {
+
+  var result =
+    '?' +
+    exports.queryParameters.date +
+    '=' +
+    encodeURIComponent(date) +
+    '&' +
+    exports.queryParameters.time +
+    '=' +
+    encodeURIComponent(time) +
+    '&' +
+    exports.queryParameters.focalChimp +
+    '=' +
+    encodeURIComponent(focalChimp) +
+    '&' +
+    exports.queryParameters.community +
+    '=' +
+    encodeURIComponent(community);
+  return result;
+
+};
+exports.createParamsForIsReview = function(isReview) {
+  var result =
+    '?' +
+    exports.queryParameters.isReview +
+    '=' +
+    encodeURIComponent(isReview);
+
+  return result;
+};
+
+exports.isReviewMode = function(){
+  var result = exports.getQueryParameter(exports.queryParameters.isReview);
+  return result;
+};
+
+exports.createParamsForFood = function(
+    date,
+    time,
+    focalChimp,
+    beginToEat,
+    food,
+    foodPart
+) {
+
+  var result = exports.createParamsForFollow(date, time, focalChimp);
+  result +=
+    '&' +
+    exports.queryParameters.beginToEat +
+    '=' +
+    encodeURIComponent(beginToEat) +
+    '&' +
+    exports.queryParameters.eatenFood +
+    '=' +
+    encodeURIComponent(food) +
+    '&' +
+    exports.queryParameters.eatenFoodPart +
+    '=' +
+    encodeURIComponent(foodPart);
+
+  return result;
+
+};
+
+exports.createParamsForSpecies = function(
+    date,
+    time,
+    focalChimp,
+    timeOfPresence,
+    speciesName,
+    numOfSpecies
+) {
+
+  var result = exports.createParamsForFollow(date, time, focalChimp);
+  result +=
+    '&' +
+    exports.queryParameters.timeOfPresence +
+    '=' +
+    encodeURIComponent(timeOfPresence) +
+    '&' +
+    exports.queryParameters.speciesName +
+    '=' +
+    encodeURIComponent(speciesName) +
+    '&' +
+    exports.queryParameters.numOfSpecies +
+    '=' +
+    encodeURIComponent(numOfSpecies);
+
+  return result;
+
+};
+
+
+exports.getFollowTimeFromUrl = function() {
+
+  var result = exports.getQueryParameter(exports.queryParameters.time);
+  return result;
+
+};
+
+
+exports.getFollowDateFromUrl = function() {
+
+  var result = exports.getQueryParameter(exports.queryParameters.date);
+  return result;
+
+};
+
+
+exports.getFocalChimpIdFromUrl = function() {
+
+  var result = exports.getQueryParameter(exports.queryParameters.focalChimp);
+  return result;
+
+};
+
+exports.getCommunityFromUrl = function() {
+
+  var result = exports.getQueryParameter(exports.queryParameters.community);
+  return result;
+}
+
+},{}],7:[function(require,module,exports){
+'use strict';
+
+// This is the strange list of times that Ian wants to use. A and J for am/pm
+// but in the Swahili form. The strange looping of times is something to do
+// with how local time is kept.
+var times = [
+  '00-12:00A',
+  '01-12:15A',
+  '02-12:30A',
+  '03-12:45A',
+  '04-1:00A',
+  '05-1:15A',
+  '06-1:30A',
+  '07-1:45A',
+  '08-2:00A',
+  '09-2:15A',
+  '10-2:30A',
+  '11-2:45A',
+  '12-3:00A',
+  '13-3:15A',
+  '14-3:30A',
+  '15-3:45A',
+  '16-4:00A',
+  '17-4:15A',
+  '18-4:30A',
+  '19-4:45A',
+  '20-5:00A',
+  '21-5:15A',
+  '22-5:30A',
+  '23-5:45A',
+  '24-6:00J',
+  '25-6:15J',
+  '26-6:30J',
+  '27-6:45J',
+  '28-7:00J',
+  '29-7:15J',
+  '30-7:30J',
+  '31-7:45J',
+  '32-8:00J',
+  '33-8:15J',
+  '34-8:30J',
+  '35-8:45J',
+  '36-9:00J',
+  '37-9:15J',
+  '38-9:30J',
+  '39-9:45J',
+  '40-10:00J',
+  '41-10:15J',
+  '42-10:30J',
+  '43-10:45J',
+  '44-11:00J',
+  '45-11:15J',
+  '46-11:30J',
+  '47-11:45J',
+  '48-12:00J',
+  '49-12:15J',
+  '50-12:30J',
+  '51-12:45J',
+  '52-1:00J',
+  '53-1:15J',
+  '54-1:30J',
+  '55-1:45J',
+  '56-2:00J',
+  '57-2:15J',
+  '58-2:30J',
+  '59-2:45J'
+];
+
+
+function sortItemsWithDate(objects) {
+  objects.sort(function(a, b) {
+    if (a.date < b.date) {
+      return -1;
+    } else if (a.date > b.date) {
+      return 1;
+    } else {
+      return 0;
+    }
+  });
+}
+
+/**
+ * A flag to be used for end time on species and food observations in the case
+ * that an end time has not yet been set.
+ */
+exports.flagEndTimeNotSet = 'ongoing';
+
+
+/**
+ * Return an array of all the times that will be stored in the database. These
+ * are not user-facing, but are intended to be stored in the database
+ * representing a particular time.
+ */
+exports.getAllTimesForDb = function() {
+  // return a defensive copy
+  return times.slice();
+};
+
+
+/**
+ * Convert a user time to its db representation.
+ */
+exports.getDbTimeFromUserTime = function(userTime) {
+  var userTimes = exports.getAllTimesForUser();
+
+  var index = userTimes.indexOf(userTime);
+  if (index < 0) {
+    throw 'cannot find user time: ' + userTime;
+  }
+
+  return exports.getAllTimesForDb()[index];
+};
+
+
+/**
+ * Convert a time like '14.01-12:12J' to a completely user-facing time.
+ */
+exports.getUserTimeFromDbTime = function(dbTime) {
+  var dashIndex = dbTime.indexOf('-');
+  var result = dbTime.substring(dashIndex + 1);
+  return result;
+};
+
+
+/**
+ * Return an array of all user-facing time labels. These are the user-facing
+ * strings corresponding to the database-facing strings returned by
+ * getAllTimesForDb.
+ */
+exports.getAllTimesForUser = function() {
+  var result = [];
+  times.forEach(function(val) {
+    // We expect something like 01-12:00J, so find the first - and take
+    // everything after that.
+    var dashIndex = val.indexOf('-');
+    var userTime = val.substring(dashIndex + 1);
+    result.push(userTime);
+  });
+  return result;
+};
+
+
+/**
+ * Sort the array of Follow objects.
+ */
+exports.sortFollows = function(follows) {
+  sortItemsWithDate(follows);
+};
+
+
+exports.sortFollowIntervals = function(intervals) {
+  sortItemsWithDate(intervals);
+};
+
+
+/**
+ * Return the next time point from the given database-facing time. Throws an
+ * error if canIncrementTime returns false.
+ */
+exports.incrementTime = function(time) {
+  if (!exports.canIncrementTime(time)) {
+    throw 'cannot increment time: ' + time;
+  }
+  var index = times.indexOf(time);
+  var result = times[index + 1];
+  return result;
+};
+
+
+/**
+ * Take a database-facing time (e.g. 05-12:12J) and return an array of objects
+ * with a 'dbTime' and 'userTime' value, corresponding to time points in the
+ * interval specified by the dbTime parameter.
+ *
+ * The dbTime keys will have the prefix include '.00' to '.14' to accommodate
+ * direct string comparisons. For instance, the time '00-12:00A' would return
+ * an array like:
+ * [
+ *   {dbTime: 00.00-12:00A, userTime: 12:00A},
+ *   {dbTime: 00.01-12:01A, userTime: 12:01A},
+ *   ...
+ *   {dbTime: 00.14-12:14A, userTime: 12:14A}
+ * ]
+ */
+exports.getDbAndUserTimesInInterval = function(dbTime) {
+  var dashIndex = dbTime.indexOf('-');
+  var colonIndex = dbTime.indexOf(':');
+
+  var prefix = dbTime.substring(0, dashIndex);
+  var hour = dbTime.substring(dashIndex + 1, colonIndex);
+  var mins = dbTime.substring(colonIndex + 1, colonIndex + 3);
+  // Everything at the end.
+  var period = dbTime.substring(colonIndex + 3);
+
+  var result = [];
+
+  for (var i = 0; i < 15; i++) {
+    var minsNum = Number(mins);
+    minsNum += i;
+    
+    var newMins;
+    if (minsNum < 10) {
+      newMins = '0' + String(minsNum);
+    } else {
+      newMins = String(minsNum);
+    }
+
+    var suffix;
+    if (i < 10) {
+      suffix = '0' + String(i);
+    } else {
+      suffix = String(i);
+    }
+
+    var newUserTime = hour + ':' + newMins + period;
+    var newPrefix = prefix + '.' + suffix;
+    var newDbTime = newPrefix + '-' + newUserTime;
+
+    var timePoint = {};
+    timePoint.dbTime = newDbTime;
+    timePoint.userTime = newUserTime;
+    result.push(timePoint);
+  }
+
+  return result;
+};
+
+
+/**
+ * True if the two times represent a negative duration, else False. Returns
+ * true also if either startDb or endDb is not truthy.
+ *
+ * Expects times to be in their db format, e.g. 13.01-12:00J.
+ */
+exports.isNegativeDuration = function(startDb, endDb) {
+  if (!startDb || !endDb) {
+    return true;
+  }
+  
+  var startPrefix = startDb.substring(0, startDb.indexOf('-'));
+  var endPrefix = endDb.substring(0, endDb.indexOf('-'));
+
+  var startNum = Number(startPrefix);
+  var endNum = Number(endPrefix);
+
+  return endNum < startNum;
+};
+
+
+/**
+ * Return ['hh', '00', '01', ..., '23'].
+ */
+exports.getAllHours = function() {
+  var result = ['hh'];
+  for (var i = 0; i < 24; i++) {
+    var hour = exports.convertToStringWithTwoZeros(i);
+    result.push(hour);
+  }
+  return result;
+};
+
+
+/**
+ * Return ['mm', '01', '02', ..., '59']
+ */
+exports.getAllMinutes = function() {
+  var result = ['mm'];
+  for (var i = 0; i < 60; i++) {
+    var mins = exports.convertToStringWithTwoZeros(i);
+    result.push(mins);
+  }
+  return result;
+};
+
+
+/**
+ * True if parseInt will succeed.
+ */
+exports.isInt = function(val) {
+  // This is kind of hacky, but it will do for converting from user input.
+  return val !== '' && !isNaN(val);
+};
+
+
+exports.canIncrementTime = function(time) {
+  var index = times.indexOf(time);
+  if (index < 0 || index === times.length) {
+    return false;
+  } else {
+    return true;
+  }
+};
+
+
+exports.canDecrementTime = function(time) {
+  var index = times.indexOf(time);
+  if (index < 0 || index === 0) {
+    return false;
+  } else {
+    return true;
+  }
+};
+
+
+/**
+ * Return the previous time point for the given database-facing time. Throws an
+ * error if canDecrementTime returns False.
+ */
+exports.decrementTime = function(time) {
+  if (!exports.canDecrementTime(time)) {
+    throw 'cannot decrement time: ' + time;
+  }
+  var index = times.indexOf(time);
+  return times[index - 1];
+};
+
+
+/**
+ * Convert an integer to a string, padded to two zeros.
+ */
+exports.convertToStringWithTwoZeros = function(intTime) {
+
+  if (intTime > 59) {
+    throw new Error('invalid intTime: ' + intTime);
+  }
+
+  var result;
+  if (intTime < 10) {
+    result = '0' + intTime;
+  } else {
+    result = intTime.toString();
+  }
+  return result;
+
+};
+
+},{}],"jgiFollowList":[function(require,module,exports){
+'use strict';
+
+var db = require('./jgiDb.js');
+var urls = require('./jgiUrls.js');
+var $ = require('jquery');
+var logger = require('./jgiLogging');
+
+/**
+ * Called when page loads to display things (Nothing to edit here)
+ */
+exports.initializeUi = function initializeUi(control) {
+
+  logger.initializeLogging();
+
+  $('#list').click(function(e) {
+    // We set the attributes we need in the li id. However, we may have
+    // clicked on the li or anything in the li. Thus we need to get
+    // the original li, which we'll do with jQuery's closest()
+    // method. First, however, we need to wrap up the target
+    // element in a jquery object.
+    // wrap up the object so we can call closest()
+    var jqueryObject = $(e.target);
+
+    // we want the closest thing with class item_space, which we
+    // have set up to have the row id
+    var containingDiv = jqueryObject.closest('.item_space');
+    var date = containingDiv.attr('date');
+    var focalId = containingDiv.attr('focal-id');
+    var beginTime = containingDiv.attr('begin-time');
+    var communityId = containingDiv.attr('community-id');
+
+    // create url and launch list
+    var queryParams = urls.createParamsForFollow(date, beginTime, focalId, communityId);
+    var isReviewSet = urls.isReviewMode();
+    console.log(
+      ' jgiLogging: showIntervals with params: ' +
+      queryParams
+    );
+    var url = control.getFileAsUrl(
+      'assets/followIntervalList.html' + queryParams
+    );
+
+    if (isReviewSet === 'false') {
+      url = control.getFileAsUrl(
+          'assets/followIntervalList.html' + queryParams
+      );
+      window.location.href = url;
+
+    } else {
+      url = control.getFileAsUrl(
+          'assets/jgiFollowReview.html' + queryParams
+      );
+      window.location.href = url;
+    }
+  });
+
+  exports.displayFollows(control);
+
+};
+
+
+/**
+ * Populate the list of Follows.
+ */
+exports.displayFollows = function displayFollows(control) {
+  var follows = db.getAllFollows(control);
+
+  follows.forEach(function(follow) {
+    var item = $('<li>');
+    item.attr('date', follow.date);
+    item.attr('focal-id', follow.focalId);
+    item.attr('begin-time', follow.beginTime);
+    item.attr('community-id', follow.communityId);
+    item.addClass('item_space');
+    item.text(follow.date + ' ' + follow.beginTime);
+
+    var chevron = $('<img>');
+    chevron.attr('src', control.getFileAsUrl('assets/img/little_arrow.png'));
+    chevron.attr('class', 'chevron');
+    item.append(chevron);
+
+    var focalIdItem = $('<li>');
+    focalIdItem.attr('class', 'detail');
+    focalIdItem.text('Focal: ' + follow.focalId);
+    item.append(focalIdItem);
+
+    $('#list').append(item);
+    //
+    // don't append the last one to avoid the fencepost problem
+    var borderDiv = $('<div>');
+    borderDiv.addClass('divider');
+    $('#list').append(borderDiv);
+  });
+};
+
+},{"./jgiDb.js":2,"./jgiLogging":3,"./jgiUrls.js":6,"jquery":1}]},{},[]);
