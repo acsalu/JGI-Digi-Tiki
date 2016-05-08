@@ -100,5 +100,5 @@ function cbGetAllFollowsFailure(error) {
  * Populate the list of Follows.
  */
  exports.displayFollows = function displayFollows() {
-  db.getAllFollows(odkData, cbGetAllFollowsSuccess, cbGetAllFollowsFailure)
+  db.getAllFollows(cbGetAllFollowsSuccess, cbGetAllFollowsFailure);
 };

@@ -139,7 +139,7 @@ exports.initializeListeners = function() {
         researcher
     );
 
-    db.writeNewFollow(odkData, follow, cbSuccess, cbFailure);
+    db.writeNewFollow(follow, cbSuccess, cbFailure);
   });
 };
 

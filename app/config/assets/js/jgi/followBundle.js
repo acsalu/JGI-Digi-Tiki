@@ -14384,14 +14384,6 @@ exports.convertTableDataToFood = function(data) {
     var communityId = data.getData(i, cols.communityId);
     var researcher = data.getData(i, cols.researcher);
 
-    console.log(i);
-    console.log(date);
-
-    // var date = follows.getData(i, 'FOL_date');
-    // var beginTime = follows.getData(i, 'FOL_time_begin');
-    // var communityId = follows.getData(i, 'FOL_CL_community_id');
-    // var focalId = follows.getData(i, 'FOL_B_AnimID');
-
     var follow = new models.Follow(
       date,
       beginTime,
@@ -14535,10 +14527,10 @@ exports.getSpeciesDataForDate = function(control, date, focalChimpId) {
  * Note that this returns actual Follow objects, NOT a TableData object
  * containing all follows.
  */
- exports.getAllFollows = function getAllFollows(odkData, cbSuccess, cbFailure) {
+ exports.getAllFollows = function getAllFollows(cbSuccess, cbFailure) {
   var table = tables.follow;
 
-  odkData.query(table.tableId, null, null, null, null,
+  window.odkData.query(table.tableId, null, null, null, null,
     null, null, true, function(tableData) {
       var result = exports.convertTableDataToFollows(tableData);
       cbSuccess(result);
@@ -14575,7 +14567,7 @@ exports.getSpeciesDataForDate = function(control, date, focalChimpId) {
 /**
  * Write a follow object (as defined in the models module).
  */
- exports.writeNewFollow = function(odkData, follow, cbSuccess, cbFailure) {
+ exports.writeNewFollow = function(follow, cbSuccess, cbFailure) {
 
   var table = tables.follow;
   var cols = table.columns;
@@ -14589,7 +14581,7 @@ exports.getSpeciesDataForDate = function(control, date, focalChimpId) {
   struct[cols.researcher] = follow.researcher;
 
   var rowId = util.genUUID();
-  odkData.addRow('follow', struct, rowId, cbSuccess, cbFailure);
+  window.odkData.addRow('follow', struct, rowId, cbSuccess, cbFailure);
 };
 
 
