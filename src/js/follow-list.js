@@ -60,22 +60,18 @@ var logger = require('./util/logging.js');
 
 };
 
-function cbGetAllFollowSuccess(follows) {
-  console.log('GetAllFollowSuccess: ' + follows.getCount() + ' follows.');
-  for (var i = 0; i < follows.getCount(); ++i) {
+function cbGetAllFollowsSuccess(follows) {
+  console.log('GetAllFollowSuccess: ' + follows.length + ' follows.');
+
+  follows.forEach(function(follow) {
     var $item = $('<li>');
 
-    var date = follows.getData(i, 'FOL_date');
-    var beginTime = follows.getData(i, 'FOL_time_begin');
-    var communityId = follows.getData(i, 'FOL_CL_community_id');
-    var focalId = follows.getData(i, 'FOL_B_AnimID');
-
-    $item.attr('date', date);
-    $item.attr('begin-time', beginTime);
-    $item.attr('focal-id', focalId);
-    $item.attr('community-id', communityId);
+    $item.attr('date', follow.date);
+    $item.attr('begin-time', follow.beginTime);
+    $item.attr('focal-id', follow.focalId);
+    $item.attr('community-id', follow.communityId);
     $item.addClass('item_space');
-    $item.text(date + ' ' + beginTime);
+    $item.text(follow.date + ' ' + follow.beginTime);
 
     var $chevron = $('<img>');
     $chevron.attr('src', odkCommon.getFileAsUrl('config/assets/img/little_arrow.png'));
@@ -84,7 +80,7 @@ function cbGetAllFollowSuccess(follows) {
 
     var $focalIdItem = $('<li>');
     $focalIdItem.addClass('detail');
-    $focalIdItem.text('Focal: ' + focalId);
+    $focalIdItem.text('Focal: ' + follow.focalId);
     $item.append($focalIdItem);
 
     $('#list').append($item);
@@ -92,10 +88,10 @@ function cbGetAllFollowSuccess(follows) {
     var $borderDiv = $('<div>');
     $borderDiv.addClass('divider');
     $('#list').append($borderDiv);
-  }
+  });
 }
 
-function cbGetAllFollowFail(error) {
+function cbGetAllFollowsFailure(error) {
   console.error('GetAllFollow failed with error: ' + error);
 }
 
@@ -104,7 +100,5 @@ function cbGetAllFollowFail(error) {
  * Populate the list of Follows.
  */
  exports.displayFollows = function displayFollows() {
-  odkData.query('follow', null, null, null, null,
-    null, null, true, cbGetAllFollowSuccess, 
-    cbGetAllFollowFail);
+  db.getAllFollows(odkData, cbGetAllFollowsSuccess, cbGetAllFollowsFailure)
 };

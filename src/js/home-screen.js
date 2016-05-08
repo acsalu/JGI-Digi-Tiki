@@ -29,13 +29,32 @@ exports.initializeListeners = function() {
   });
 
   $('#most-recent-follow-button').click(function() {
-    // console.log('clicked most recent');
-    // var follows = db.getAllFollows(control);
-    
-    // if (follows.length === 0) {
-    //   alert('No Follows!');
-    //   return;
-    // }
+    console.log('clicked most recent');
+
+    function cbGetAllFollowSuccess(follows) {
+      console.log('GetAllFollowSuccess: ' + follows.getCount() + ' follows.');
+      if (follows.getCount() === 0) {
+        alert('No Follows!');
+        return;
+      }
+
+      for (var i = 0; i < follows.getCount(); ++i) {
+        var $item = $('<li>');
+
+        var date = follows.getData(i, 'FOL_date');
+        var beginTime = follows.getData(i, 'FOL_time_begin');
+        var communityId = follows.getData(i, 'FOL_CL_community_id');
+        var focalId = follows.getData(i, 'FOL_B_AnimID');
+      }
+    }
+
+    function cbGetAllFollowFail(error) {
+      console.error('GetAllFollow failed with error: ' + error);
+    }
+
+    odkData.query('follow', null, null, null, null,
+      null, null, true, cbGetAllFollowSuccess, 
+      cbGetAllFollowFail);
 
     // util.sortFollows(follows);
 
