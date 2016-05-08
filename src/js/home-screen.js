@@ -2,12 +2,13 @@
 'use strict';
 
 // For the JGI Home Screen, but to be used with browserify.
-
-var db = require('./jgiDb');
 var $ = require('jquery');
-var util = require('./jgiUtil');
-var urls = require('./jgiUrls');
-var logging = require('./jgiLogging');
+global.jQuery = require('jquery');
+
+var db = require('./util/db.js');
+var urls = require('./util/urls.js');
+var logger = require('./util/logging.js');
+var util = require('./util/util.js');
 
 exports.initializeListeners = function() {
 
@@ -18,24 +19,42 @@ exports.initializeListeners = function() {
   $('body').css('background-image', 'url(' + fileUri + ')');
 
   $('#begin-follow-button').on('click', function() {
-    odkTables.launchHTML('config/assets/newFollow.html');
+    odkTables.launchHTML('config/assets/new_follow.html');
   });
 
   $('#existing-follow-button').on('click', function() {
     var queryParams = urls.createParamsForIsReview(false);
-    var url = odkCommon.getFileAsUrl('config/assets/followList.html' + queryParams);
+    var url = odkCommon.getFileAsUrl('config/assets/follow_list.html' + queryParams);
     window.location.href = url;
-    //control.launchHTML('assets/followList.html');
   });
 
-  $mostRecentFollow.click(function() {
-    // console.log('clicked most recent');
-    // var follows = db.getAllFollows(control);
-    
-    // if (follows.length === 0) {
-    //   alert('No Follows!');
-    //   return;
-    // }
+  $('#most-recent-follow-button').click(function() {
+    console.log('clicked most recent');
+
+    function cbGetAllFollowSuccess(follows) {
+      console.log('GetAllFollowSuccess: ' + follows.getCount() + ' follows.');
+      if (follows.getCount() === 0) {
+        alert('No Follows!');
+        return;
+      }
+
+      for (var i = 0; i < follows.getCount(); ++i) {
+        var $item = $('<li>');
+
+        var date = follows.getData(i, 'FOL_date');
+        var beginTime = follows.getData(i, 'FOL_time_begin');
+        var communityId = follows.getData(i, 'FOL_CL_community_id');
+        var focalId = follows.getData(i, 'FOL_B_AnimID');
+      }
+    }
+
+    function cbGetAllFollowFail(error) {
+      console.error('GetAllFollow failed with error: ' + error);
+    }
+
+    odkData.query('follow', null, null, null, null,
+      null, null, true, cbGetAllFollowSuccess, 
+      cbGetAllFollowFail);
 
     // util.sortFollows(follows);
 
@@ -69,7 +88,7 @@ exports.initializeListeners = function() {
 };
 
 exports.initializeUi = function() {
-  // logging.initializeClickLogger();
+  logger.initializeClickLogger();
 
   exports.initializeListeners();
 };

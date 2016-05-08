@@ -1,8 +1,7 @@
 'use strict';
 
 var $ = require('jquery');
-var urls = require('./jgiUrls');
-
+var urls = require('./urls');
 
 exports.DO_LOGGING = true;
 

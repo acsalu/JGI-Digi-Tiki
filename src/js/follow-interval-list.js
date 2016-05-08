@@ -1,9 +1,11 @@
 'use strict';
 
-var db = require('./jgiDb.js');
-var urls = require('./jgiUrls.js');
 var $ = require('jquery');
-var logger = require('./jgiLogging');
+global.jQuery = require('jquery');
+
+var db = require('./util/db.js');
+var urls = require('./util/urls.js');
+var logger = require('./util/logging.js');
 
 /**
  * Called when page loads to display things (Nothing to edit here)
@@ -24,69 +26,54 @@ exports.initializeUi = function initializeUi(control) {
     // we want the closest thing with class item_space, which we
     // have set up to have the row id
     var containingDiv = jqueryObject.closest('.item_space');
-    var date = containingDiv.attr('date');
-    var focalId = containingDiv.attr('focal-id');
-    var beginTime = containingDiv.attr('begin-time');
-    var communityId = containingDiv.attr('community-id');
+    var date = urls.getFollowDateFromUrl();
+    var focalId = urls.getFocalChimpIdFromUrl();
+    var beginTime = containingDiv.attr('time');
+    var communityId = urls.getCommunityFromUrl();
 
     // create url and launch list
     var queryParams = urls.createParamsForFollow(date, beginTime, focalId, communityId);
-    var isReviewSet = urls.isReviewMode();
     console.log(
-      ' jgiLogging: showIntervals with params: ' +
+      ' jgiLogging: launchFollowScreenFromList with params: ' +
       queryParams
     );
     var url = control.getFileAsUrl(
-      'assets/followIntervalList.html' + queryParams
+      'assets/followScreen.html' + queryParams
     );
 
-    if (isReviewSet === 'false') {
-      url = control.getFileAsUrl(
-          'assets/followIntervalList.html' + queryParams
-      );
-      window.location.href = url;
-
-    } else {
-      url = control.getFileAsUrl(
-          'assets/jgiFollowReview.html' + queryParams
-      );
-      window.location.href = url;
-    }
+    window.location.href = url;
   });
 
-  exports.displayFollows(control);
+  exports.displayFollowIntervals(control);
 
 };
-
 
 /**
  * Populate the list of Follows.
  */
-exports.displayFollows = function displayFollows(control) {
-  var follows = db.getAllFollows(control);
+exports.displayFollowIntervals = function displayFollowIntervals(control) {
+  var followDate = urls.getFollowDateFromUrl();
+  var focalId = urls.getFocalChimpIdFromUrl();
 
-  follows.forEach(function(follow) {
+  var followIntervals = db.getFollowIntervalsForFollow(
+      control,
+      followDate,
+      focalId
+  );
+
+  followIntervals.forEach(function(follow) {
     var item = $('<li>');
-    item.attr('date', follow.date);
-    item.attr('focal-id', follow.focalId);
-    item.attr('begin-time', follow.beginTime);
-    item.attr('community-id', follow.communityId);
+    item.attr('time', follow.beginTime);
     item.addClass('item_space');
-    item.text(follow.date + ' ' + follow.beginTime);
+    item.text(follow.beginTime);
 
     var chevron = $('<img>');
     chevron.attr('src', control.getFileAsUrl('assets/img/little_arrow.png'));
     chevron.attr('class', 'chevron');
     item.append(chevron);
 
-    var focalIdItem = $('<li>');
-    focalIdItem.attr('class', 'detail');
-    focalIdItem.text('Focal: ' + follow.focalId);
-    item.append(focalIdItem);
-
     $('#list').append(item);
-    //
-    // don't append the last one to avoid the fencepost problem
+
     var borderDiv = $('<div>');
     borderDiv.addClass('divider');
     $('#list').append(borderDiv);

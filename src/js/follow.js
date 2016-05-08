@@ -5,12 +5,17 @@
  * Code for dealing with the follow screen, in particular the UI.
  */
 
-var urls = require('./jgiUrls');
-var models = require('./jgiModels');
-var db = require('./jgiDb');
 var $ = require('jquery');
-var util = require('./jgiUtil');
-var logging = require('./jgiLogging');
+global.jQuery = require('jquery');
+require('bootstrap');
+require('ratchet');
+var Papa = require('papaparse');
+
+var db = require('./util/db.js');
+var models = require('./util/models');
+var urls = require('./util/urls.js');
+var logger = require('./util/logging.js');
+var util = require('./util/util.js');
 
 var FLAG_PLACE_HOLDER_TIME = 's:dk';
 var FOOD_LIST_COOKIE = "JGIRecentFoodsList";
@@ -1076,7 +1081,7 @@ exports.initializePreviousButton = function(control) {
       focalId,
       communityId
     );
-    var url = control.getFileAsUrl('assets/followScreen.html' + queryString);
+    var url = control.getFileAsUrl('assets/follow.html' + queryString);
 
     // Navigate to that url to move to the next timepoint.
     window.location.href = url;
@@ -1687,7 +1692,7 @@ exports.initializeListeners = function(control) {
       urls.getFocalChimpIdFromUrl(),
       urls.getCommunityFromUrl()
     );
-    var url = control.getFileAsUrl('assets/followScreen.html' + queryString);
+    var url = control.getFileAsUrl('assets/follow.html' + queryString);
 
     // Navigate to that url to move to the next timepoint.
     window.location.href = url;
@@ -2091,7 +2096,7 @@ exports.updateVisiblityForChimp = function(chimp) {
  */
 exports.initializeUi = function(control) {
 
-  logging.initializeLogging();
+  logger.initializeLogging();
 
   $('.food-container').addClass('nodisplay');
   $('.species-container').addClass('nodisplay');

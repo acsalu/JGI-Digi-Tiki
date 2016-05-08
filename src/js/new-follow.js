@@ -2,13 +2,16 @@
 'use strict';
 
 var $ = require('jquery');
+global.jQuery = require('jquery');
 require('jquery-ui');
+require('bootstrap');
+require('ratchet');
 var Papa = require('papaparse');
 
-var db = require('./jgiDb');
-var urls = require('./jgiUrls');
-var jgiUtil = require('./jgiUtil');
-var models = require('./jgiModels');
+var db = require('./util/db.js');
+var models = require('./util/models');
+var urls = require('./util/urls.js');
+var util = require('./util/util.js');
 
 var chimpData;
 
@@ -18,26 +21,6 @@ function invalidDataToStart(data) {
   } else {
     return false;
   }
-}
-
-function writeNewFollow(
-            date,
-            focalChimpId,
-            communityId,
-            beginTime,
-            researcher) {
-    
-        var struct = {};
-        struct['FOL_date'] = date;
-        struct['FOL_B_AnimID'] = focalChimpId;
-        struct['FOL_CL_community_id'] = communityId;
-        struct['FOL_time_begin'] = beginTime;
-        struct['FOL_am_observer1'] = researcher;
-
-        // Now we'll write it into the database.
-
-        var rowId = util.genUUID();
-        odkData.addRow('follow', struct, rowId, cbSuccess, cbFailure);
 }
 
 function cbSuccess(result) {
@@ -53,8 +36,9 @@ function cbSuccess(result) {
         date,
         beginTime,
         focalChimpId);
+    console.log("jgiNewFollow queryString: " + queryString);
     var url = odkCommon.getFileAsUrl(
-            'config/assets/followScreen.html' + queryString);
+            'config/assets/follow.html' + queryString);
 
     // There seems to be an issue with the way window.location is set here
     window.location.href = url;
@@ -147,12 +131,15 @@ exports.initializeListeners = function() {
     $('#spinners').css('display', 'block'); // to display
 
     // Update the database.
-    writeNewFollow(
-            date,
-            focalChimpId,
-            communityId,
-            beginTime,
-            researcher);
+    var follow = new models.Follow(
+        date,
+        beginTime,
+        focalChimpId,
+        communityId,
+        researcher
+    );
+
+    db.writeNewFollow(odkData, follow, cbSuccess, cbFailure);
   });
 };
 
@@ -161,8 +148,8 @@ exports.initializeUi = function() {
 
   $("#FOL_date").datepicker();
 
-  var timesDb = jgiUtil.getAllTimesForDb();
-  var timesUser = jgiUtil.getAllTimesForUser();
+  var timesDb = util.getAllTimesForDb();
+  var timesUser = util.getAllTimesForUser();
   if (timesDb.length !== timesUser.length) {
     alert('Length of db times and user times not equal, problem!');
   }
