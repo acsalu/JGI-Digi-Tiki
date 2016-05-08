@@ -9846,8 +9846,8 @@ return jQuery;
 /* global control */
 'use strict';
 
-var tables = require('./jgiTables');
-var models = require('./jgiModels');
+var tables = require('./tables');
+var models = require('./models');
 
 exports.certaintyLabels = {
   certain: '1',
@@ -10567,12 +10567,11 @@ exports.writeRowForSpecies = function(control, species, isUpdate) {
   }
 };
 
-},{"./jgiModels":4,"./jgiTables":5}],3:[function(require,module,exports){
+},{"./models":4,"./tables":5}],3:[function(require,module,exports){
 'use strict';
 
 var $ = require('jquery');
-var urls = require('./jgiUrls');
-
+var urls = require('./urls');
 
 exports.DO_LOGGING = true;
 
@@ -10615,14 +10614,14 @@ exports.initializeLogging = function() {
   exports.initializeClickLogger();
 };
 
-},{"./jgiUrls":6,"jquery":1}],4:[function(require,module,exports){
+},{"./urls":6,"jquery":1}],4:[function(require,module,exports){
 'use strict';
 
 /**
  * The models we will use for rows in the database.
  */
 
-var util = require('./jgiUtil');
+var util = require('./util');
 
 
 /**
@@ -10860,7 +10859,7 @@ exports.createNewSpecies = function(
   return result;
 };
 
-},{"./jgiUtil":7}],5:[function(require,module,exports){
+},{"./util":7}],5:[function(require,module,exports){
 'use strict';
 
 /**
@@ -11431,12 +11430,15 @@ exports.convertToStringWithTwoZeros = function(intTime) {
 };
 
 },{}],"jgiFollowIntervalList":[function(require,module,exports){
+(function (global){
 'use strict';
 
-var db = require('./jgiDb.js');
-var urls = require('./jgiUrls.js');
 var $ = require('jquery');
-var logger = require('./jgiLogging');
+global.jQuery = require('jquery');
+
+var db = require('./util/db.js');
+var urls = require('./util/urls.js');
+var logger = require('./util/logging.js');
 
 /**
  * Called when page loads to display things (Nothing to edit here)
@@ -11511,4 +11513,5 @@ exports.displayFollowIntervals = function displayFollowIntervals(control) {
   });
 };
 
-},{"./jgiDb.js":2,"./jgiLogging":3,"./jgiUrls.js":6,"jquery":1}]},{},[]);
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./util/db.js":2,"./util/logging.js":3,"./util/urls.js":6,"jquery":1}]},{},[]);

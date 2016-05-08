@@ -4,7 +4,7 @@
  * The models we will use for rows in the database.
  */
 
-var util = require('./jgiUtil');
+var util = require('./util');
 
 
 /**

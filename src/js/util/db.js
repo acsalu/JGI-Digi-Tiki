@@ -1,8 +1,8 @@
 /* global control */
 'use strict';
 
-var tables = require('./jgiTables');
-var models = require('./jgiModels');
+var tables = require('./tables');
+var models = require('./models');
 
 exports.certaintyLabels = {
   certain: '1',

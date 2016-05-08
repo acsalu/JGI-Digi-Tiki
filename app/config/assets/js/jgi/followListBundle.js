@@ -9846,8 +9846,8 @@ return jQuery;
 /* global control */
 'use strict';
 
-var tables = require('./jgiTables');
-var models = require('./jgiModels');
+var tables = require('./tables');
+var models = require('./models');
 
 exports.certaintyLabels = {
   certain: '1',
@@ -10567,12 +10567,11 @@ exports.writeRowForSpecies = function(control, species, isUpdate) {
   }
 };
 
-},{"./jgiModels":4,"./jgiTables":5}],3:[function(require,module,exports){
+},{"./models":4,"./tables":5}],3:[function(require,module,exports){
 'use strict';
 
 var $ = require('jquery');
-var urls = require('./jgiUrls');
-
+var urls = require('./urls');
 
 exports.DO_LOGGING = true;
 
@@ -10615,14 +10614,14 @@ exports.initializeLogging = function() {
   exports.initializeClickLogger();
 };
 
-},{"./jgiUrls":6,"jquery":1}],4:[function(require,module,exports){
+},{"./urls":6,"jquery":1}],4:[function(require,module,exports){
 'use strict';
 
 /**
  * The models we will use for rows in the database.
  */
 
-var util = require('./jgiUtil');
+var util = require('./util');
 
 
 /**
@@ -10860,7 +10859,7 @@ exports.createNewSpecies = function(
   return result;
 };
 
-},{"./jgiUtil":7}],5:[function(require,module,exports){
+},{"./util":7}],5:[function(require,module,exports){
 'use strict';
 
 /**
@@ -11431,18 +11430,20 @@ exports.convertToStringWithTwoZeros = function(intTime) {
 };
 
 },{}],"jgiFollowList":[function(require,module,exports){
+(function (global){
 'use strict';
 
 var $ = require('jquery');
+global.jQuery = require('jquery');
 
-var db = require('./jgiDb.js');
-var urls = require('./jgiUrls.js');
-var logger = require('./jgiLogging');
+var db = require('./util/db.js');
+var urls = require('./util/urls.js');
+var logger = require('./util/logging.js');
 
 /**
  * Called when page loads to display things (Nothing to edit here)
  */
-exports.initializeUi = function initializeUi() {
+ exports.initializeUi = function initializeUi() {
 
   logger.initializeLogging();
 
@@ -11469,21 +11470,21 @@ exports.initializeUi = function initializeUi() {
     console.log(
       ' jgiLogging: showIntervals with params: ' +
       queryParams
-    );
+      );
     var url = odkCommon.getFileAsUrl(
-      'config/assets/followIntervalList.html' + queryParams
-    );
+      'config/assets/follow_interval_list.html' + queryParams
+      );
 
     if (isReviewSet === 'false') {
       url = odkCommon.getFileAsUrl(
-          'config/assets/followIntervalList.html' + queryParams
-      );
+        'config/assets/follow_interval_list.html' + queryParams
+        );
       window.location.href = url;
 
     } else {
       url = odkCommon.getFileAsUrl(
-          'config/assets/jgiFollowReview.html' + queryParams
-      );
+        'config/assets/follow_review.html' + queryParams
+        );
       window.location.href = url;
     }
   });
@@ -11528,17 +11529,18 @@ function cbGetAllFollowSuccess(follows) {
 }
 
 function cbGetAllFollowFail(error) {
- console.error('GetAllFollow failed with error: ' + error);
+  console.error('GetAllFollow failed with error: ' + error);
 }
 
 
 /**
  * Populate the list of Follows.
  */
-exports.displayFollows = function displayFollows() {
+ exports.displayFollows = function displayFollows() {
   odkData.query('follow', null, null, null, null,
-            null, null, true, cbGetAllFollowSuccess, 
-            cbGetAllFollowFail);
+    null, null, true, cbGetAllFollowSuccess, 
+    cbGetAllFollowFail);
 };
 
-},{"./jgiDb.js":2,"./jgiLogging":3,"./jgiUrls.js":6,"jquery":1}]},{},[]);
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./util/db.js":2,"./util/logging.js":3,"./util/urls.js":6,"jquery":1}]},{},[]);

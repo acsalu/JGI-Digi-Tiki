@@ -1,9 +1,11 @@
 'use strict';
 
-var db = require('./jgiDb.js');
-var urls = require('./jgiUrls.js');
 var $ = require('jquery');
-var logger = require('./jgiLogging');
+global.jQuery = require('jquery');
+
+var db = require('./util/db.js');
+var urls = require('./util/urls.js');
+var logger = require('./util/logging.js');
 
 /**
  * Called when page loads to display things (Nothing to edit here)

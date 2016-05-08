@@ -9846,8 +9846,8 @@ return jQuery;
 /* global control */
 'use strict';
 
-var tables = require('./jgiTables');
-var models = require('./jgiModels');
+var tables = require('./tables');
+var models = require('./models');
 
 exports.certaintyLabels = {
   certain: '1',
@@ -10567,12 +10567,11 @@ exports.writeRowForSpecies = function(control, species, isUpdate) {
   }
 };
 
-},{"./jgiModels":4,"./jgiTables":5}],3:[function(require,module,exports){
+},{"./models":4,"./tables":5}],3:[function(require,module,exports){
 'use strict';
 
 var $ = require('jquery');
-var urls = require('./jgiUrls');
-
+var urls = require('./urls');
 
 exports.DO_LOGGING = true;
 
@@ -10615,14 +10614,14 @@ exports.initializeLogging = function() {
   exports.initializeClickLogger();
 };
 
-},{"./jgiUrls":6,"jquery":1}],4:[function(require,module,exports){
+},{"./urls":6,"jquery":1}],4:[function(require,module,exports){
 'use strict';
 
 /**
  * The models we will use for rows in the database.
  */
 
-var util = require('./jgiUtil');
+var util = require('./util');
 
 
 /**
@@ -10860,7 +10859,7 @@ exports.createNewSpecies = function(
   return result;
 };
 
-},{"./jgiUtil":7}],5:[function(require,module,exports){
+},{"./util":7}],5:[function(require,module,exports){
 'use strict';
 
 /**
@@ -11431,16 +11430,18 @@ exports.convertToStringWithTwoZeros = function(intTime) {
 };
 
 },{}],"jgiHomeScreen":[function(require,module,exports){
+(function (global){
 /* global alert */
 'use strict';
 
 // For the JGI Home Screen, but to be used with browserify.
-
-var db = require('./jgiDb');
 var $ = require('jquery');
-var util = require('./jgiUtil');
-var urls = require('./jgiUrls');
-var logging = require('./jgiLogging');
+global.jQuery = require('jquery');
+
+var db = require('./util/db.js');
+var urls = require('./util/urls.js');
+var logger = require('./util/logging.js');
+var util = require('./util/util.js');
 
 exports.initializeListeners = function() {
 
@@ -11451,14 +11452,13 @@ exports.initializeListeners = function() {
   $('body').css('background-image', 'url(' + fileUri + ')');
 
   $('#begin-follow-button').on('click', function() {
-    odkTables.launchHTML('config/assets/newFollow.html');
+    odkTables.launchHTML('config/assets/new_follow.html');
   });
 
   $('#existing-follow-button').on('click', function() {
     var queryParams = urls.createParamsForIsReview(false);
-    var url = odkCommon.getFileAsUrl('config/assets/followList.html' + queryParams);
+    var url = odkCommon.getFileAsUrl('config/assets/follow_list.html' + queryParams);
     window.location.href = url;
-    //control.launchHTML('assets/followList.html');
   });
 
   $('#most-recent-follow-button').click(function() {
@@ -11502,9 +11502,10 @@ exports.initializeListeners = function() {
 };
 
 exports.initializeUi = function() {
-  logging.initializeClickLogger();
+  logger.initializeClickLogger();
 
   exports.initializeListeners();
 };
 
-},{"./jgiDb":2,"./jgiLogging":3,"./jgiUrls":6,"./jgiUtil":7,"jquery":1}]},{},[]);
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./util/db.js":2,"./util/logging.js":3,"./util/urls.js":6,"./util/util.js":7,"jquery":1}]},{},[]);

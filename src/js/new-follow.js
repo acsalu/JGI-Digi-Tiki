@@ -2,13 +2,16 @@
 'use strict';
 
 var $ = require('jquery');
+global.jQuery = require('jquery');
 require('jquery-ui');
+require('bootstrap');
+require('ratchet');
 var Papa = require('papaparse');
 
-var db = require('./jgiDb');
-var urls = require('./jgiUrls');
-var jgiUtil = require('./jgiUtil');
-var models = require('./jgiModels');
+var db = require('./util/db.js');
+var models = require('./util/models');
+var urls = require('./util/urls.js');
+var jgiUtil = require('./util/util.js');
 
 var chimpData;
 
@@ -55,7 +58,7 @@ function cbSuccess(result) {
         focalChimpId);
     console.log("jgiNewFollow queryString: " + queryString);
     var url = odkCommon.getFileAsUrl(
-            'config/assets/followScreen.html' + queryString);
+            'config/assets/follow.html' + queryString);
 
     // There seems to be an issue with the way window.location is set here
     window.location.href = url;

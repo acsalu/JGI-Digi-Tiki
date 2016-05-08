@@ -1,15 +1,16 @@
 'use strict';
 
 var $ = require('jquery');
+global.jQuery = require('jquery');
 
-var db = require('./jgiDb.js');
-var urls = require('./jgiUrls.js');
-var logger = require('./jgiLogging');
+var db = require('./util/db.js');
+var urls = require('./util/urls.js');
+var logger = require('./util/logging.js');
 
 /**
  * Called when page loads to display things (Nothing to edit here)
  */
-exports.initializeUi = function initializeUi() {
+ exports.initializeUi = function initializeUi() {
 
   logger.initializeLogging();
 
@@ -36,21 +37,21 @@ exports.initializeUi = function initializeUi() {
     console.log(
       ' jgiLogging: showIntervals with params: ' +
       queryParams
-    );
+      );
     var url = odkCommon.getFileAsUrl(
-      'config/assets/followIntervalList.html' + queryParams
-    );
+      'config/assets/follow_interval_list.html' + queryParams
+      );
 
     if (isReviewSet === 'false') {
       url = odkCommon.getFileAsUrl(
-          'config/assets/followIntervalList.html' + queryParams
-      );
+        'config/assets/follow_interval_list.html' + queryParams
+        );
       window.location.href = url;
 
     } else {
       url = odkCommon.getFileAsUrl(
-          'config/assets/jgiFollowReview.html' + queryParams
-      );
+        'config/assets/follow_review.html' + queryParams
+        );
       window.location.href = url;
     }
   });
@@ -95,15 +96,15 @@ function cbGetAllFollowSuccess(follows) {
 }
 
 function cbGetAllFollowFail(error) {
- console.error('GetAllFollow failed with error: ' + error);
+  console.error('GetAllFollow failed with error: ' + error);
 }
 
 
 /**
  * Populate the list of Follows.
  */
-exports.displayFollows = function displayFollows() {
+ exports.displayFollows = function displayFollows() {
   odkData.query('follow', null, null, null, null,
-            null, null, true, cbGetAllFollowSuccess, 
-            cbGetAllFollowFail);
+    null, null, true, cbGetAllFollowSuccess, 
+    cbGetAllFollowFail);
 };
